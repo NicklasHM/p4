@@ -10,7 +10,7 @@ public class Parser {
 	public const int _stringLit = 3;
 	public const int _dateLit = 4;
 	public const int _timeLit = 5;
-	public const int maxT = 70;
+	public const int maxT = 67;
 
 	const bool _T = true;
 	const bool _x = false;
@@ -93,214 +93,181 @@ public class Parser {
 	void Statement() {
 		if (StartOf(2)) {
 			Decl();
-		} else if (la.kind == 7) {
+		} else if (StartOf(3)) {
+			Expr();
+		} else if (la.kind == 1) {
+			Get();
+			Expect(7);
+			Expect(8);
+			Expect(1);
+		} else if (la.kind == 9) {
 			Get();
 			Expect(1);
-		} else if (la.kind == 8) {
+		} else if (la.kind == 10) {
 			Get();
 			BoolExpr();
-			Expect(9);
-			Statement();
-			if (la.kind == 10) {
-				Get();
-				Statement();
-			}
-		} else if (la.kind == 1) {
-			Get();
 			Expect(11);
+			Statement();
 			Expect(12);
-			Expect(1);
-		} else if (la.kind == 1) {
+			Statement();
+		} else if (la.kind == 10) {
 			Get();
-			Expect(13);
-			Expr();
-		} else if (la.kind == 14) {
-			Get();
-			Expect(1);
-			TimeExpr();
-		} else if (la.kind == 15) {
-			Get();
-			Expect(1);
-			Expect(16);
-			if (StartOf(3)) {
-				ArgumentList();
-			}
-			Expect(17);
-		} else if (la.kind == 18) {
-			Get();
-			AvailabilityExpr();
-			while (la.kind == 24 || la.kind == 25 || la.kind == 26) {
-				ReservationOp();
-				AvailabilityExpr();
-			}
-		} else if (la.kind == 19) {
-			Get();
-			AvailabilityExpr();
-		} else SynErr(71);
+			BoolExpr();
+			Expect(11);
+			Statement();
+		} else SynErr(68);
 	}
 
 	void Decl() {
 		if (StartOf(4)) {
-			Type();
-			Expect(1);
-			if (la.kind == 13) {
-				Get();
-				Expr();
-			}
-		} else if (la.kind == 20) {
-			Get();
-			Expect(1);
-			if (la.kind == 11) {
-				Get();
-				Expect(12);
-				Expect(1);
-			}
+			VarDecl();
 		} else if (la.kind == 1) {
+			ResourceDecl();
+		} else if (la.kind == 25) {
+			CategoryDecl();
+		} else if (la.kind == 26) {
+			TemplateDecl();
+		} else SynErr(69);
+	}
+
+	void Expr() {
+		if (la.kind == 1) {
+			Get();
+			Expect(13);
+			Expr();
+		} else if (la.kind == 1 || la.kind == 2 || la.kind == 27) {
+			ArithExpr();
+		} else if (StartOf(5)) {
+			BoolExpr();
+		} else if (la.kind == 47) {
+			TimeExpr();
+		} else if (la.kind == 1 || la.kind == 4) {
+			DateTime();
+		} else if (la.kind == 1 || la.kind == 2) {
+			Duration();
+		} else if (la.kind == 1 || la.kind == 2 || la.kind == 27) {
+			ResourceExpr();
+		} else if (la.kind == 1 || la.kind == 2 || la.kind == 27) {
+			AvailabilityExpr();
+		} else if (la.kind == 27 || la.kind == 45) {
+			ReservationExpr();
+		} else if (la.kind == 30) {
 			Get();
 			Expect(1);
-			Expect(21);
-			while (StartOf(4)) {
-				VarDecl();
-				Expect(6);
-			}
-			Expect(22);
-		} else if (la.kind == 23) {
+			TimeExpr();
+		} else if (la.kind == 31) {
 			Get();
 			Expect(1);
-			Expect(16);
-			if (StartOf(4)) {
-				ParamList();
+			Expect(27);
+			if (StartOf(3)) {
+				ArgumentList();
 			}
-			Expect(17);
-			Expect(21);
-			while (StartOf(1)) {
-				Statement();
-				Expect(6);
-			}
-			Expect(22);
-		} else SynErr(72);
+			Expect(28);
+		} else SynErr(70);
 	}
 
 	void BoolExpr() {
 		BoolTerm();
-		while (la.kind == 25) {
+		while (la.kind == 36) {
 			Get();
 			BoolTerm();
 		}
 	}
 
-	void Expr() {
-		if (la.kind == 1 || la.kind == 2 || la.kind == 16) {
-			ArithExpr();
-			if (StartOf(5)) {
-				if (la.kind == 13) {
-					AssignTail();
-				} else if (StartOf(6)) {
-					BoolTail();
-				} else {
-					TimeTail();
-				}
-			}
-		} else if (la.kind == 36) {
-			Get();
-		} else if (la.kind == 37) {
-			Get();
-		} else if (la.kind == 3) {
-			Get();
-		} else SynErr(73);
-	}
-
-	void TimeExpr() {
-		Expect(44);
-		DateTimeExpr();
-		if (la.kind == 45) {
-			Get();
-			DateTimeExpr();
-		} else if (la.kind == 46) {
-			Get();
-			Duration();
-		} else SynErr(74);
-	}
-
-	void ArgumentList() {
-		Expr();
-		while (la.kind == 26) {
-			Get();
+	void VarDecl() {
+		if (StartOf(4)) {
+			Type();
+			Expect(1);
+		} else if (StartOf(4)) {
+			Type();
+			Expect(1);
+			Expect(13);
 			Expr();
+		} else SynErr(71);
+	}
+
+	void ResourceDecl() {
+		Expect(1);
+		Expect(1);
+		Expect(23);
+		while (StartOf(4)) {
+			VarDecl();
+			Expect(6);
+		}
+		Expect(24);
+	}
+
+	void CategoryDecl() {
+		Expect(25);
+		Expect(1);
+		if (la.kind == 7) {
+			Get();
+			Expect(8);
+			Expect(1);
 		}
 	}
 
-	void AvailabilityExpr() {
-		ResourceExpr();
-		TimeExpr();
-		Constraint();
-		Recurrence();
-	}
-
-	void ReservationOp() {
-		if (la.kind == 24) {
-			Get();
-		} else if (la.kind == 25) {
-			Get();
-		} else if (la.kind == 26) {
-			Get();
-		} else SynErr(75);
+	void TemplateDecl() {
+		Expect(26);
+		Expect(1);
+		Expect(27);
+		if (StartOf(4)) {
+			ParamList();
+		}
+		Expect(28);
+		Expect(23);
+		while (StartOf(1)) {
+			Statement();
+			Expect(6);
+		}
+		Expect(24);
 	}
 
 	void Type() {
 		switch (la.kind) {
-		case 27: {
+		case 19: case 20: case 21: case 22: {
+			BaseType();
+			break;
+		}
+		case 14: {
 			Get();
 			break;
 		}
-		case 28: {
+		case 15: {
 			Get();
 			break;
 		}
-		case 29: {
+		case 16: {
 			Get();
 			break;
 		}
-		case 30: {
+		case 17: {
 			Get();
 			break;
 		}
-		case 31: {
+		case 18: {
 			Get();
 			break;
 		}
-		case 32: {
-			Get();
-			break;
-		}
-		case 33: {
-			Get();
-			break;
-		}
-		case 34: {
-			Get();
-			break;
-		}
-		case 35: {
-			Get();
-			break;
-		}
-		default: SynErr(76); break;
+		default: SynErr(72); break;
 		}
 	}
 
-	void VarDecl() {
-		Type();
-		Expect(1);
-		if (la.kind == 13) {
+	void BaseType() {
+		if (la.kind == 19) {
 			Get();
-			Expr();
-		}
+		} else if (la.kind == 20) {
+			Get();
+		} else if (la.kind == 21) {
+			Get();
+		} else if (la.kind == 22) {
+			Get();
+		} else SynErr(73);
 	}
 
 	void ParamList() {
 		Param();
-		while (la.kind == 26) {
+		while (la.kind == 29) {
 			Get();
 			Param();
 		}
@@ -313,8 +280,8 @@ public class Parser {
 
 	void ArithExpr() {
 		ArithTerm();
-		while (la.kind == 47 || la.kind == 48) {
-			if (la.kind == 47) {
+		while (la.kind == 32 || la.kind == 33) {
+			if (la.kind == 32) {
 				Get();
 			} else {
 				Get();
@@ -323,113 +290,33 @@ public class Parser {
 		}
 	}
 
-	void AssignTail() {
-		Expect(13);
-		Expr();
-	}
-
-	void BoolTail() {
-		switch (la.kind) {
-		case 38: {
+	void TimeExpr() {
+		Expect(47);
+		DateTime();
+		if (la.kind == 48) {
 			Get();
-			break;
-		}
-		case 39: {
-			Get();
-			break;
-		}
-		case 40: {
-			Get();
-			break;
-		}
-		case 41: {
-			Get();
-			break;
-		}
-		case 42: {
-			Get();
-			break;
-		}
-		case 43: {
-			Get();
-			break;
-		}
-		default: SynErr(77); break;
-		}
-		ArithExpr();
-		while (la.kind == 24 || la.kind == 25) {
-			if (la.kind == 24) {
-				Get();
-			} else {
-				Get();
-			}
-			BoolFactor();
-		}
-	}
-
-	void TimeTail() {
-		Expect(44);
-		DateTimeExpr();
-		if (la.kind == 45) {
-			Get();
-			DateTimeExpr();
-		} else if (la.kind == 46) {
+			DateTime();
+		} else if (la.kind == 49) {
 			Get();
 			Duration();
-		} else SynErr(78);
+		} else SynErr(74);
 	}
 
-	void BoolFactor() {
-		if (la.kind == 51) {
+	void DateTime() {
+		if (la.kind == 4) {
 			Get();
-			BoolFactor();
-		} else if (la.kind == 16) {
+			Expect(5);
+		} else if (la.kind == 1) {
 			Get();
-			BoolExpr();
-			Expect(17);
-		} else if (la.kind == 1 || la.kind == 2 || la.kind == 16) {
-			ArithExpr();
-			switch (la.kind) {
-			case 38: {
-				Get();
-				break;
-			}
-			case 39: {
-				Get();
-				break;
-			}
-			case 40: {
-				Get();
-				break;
-			}
-			case 41: {
-				Get();
-				break;
-			}
-			case 42: {
-				Get();
-				break;
-			}
-			case 43: {
-				Get();
-				break;
-			}
-			default: SynErr(79); break;
-			}
-			ArithExpr();
-		} else SynErr(80);
-	}
-
-	void DateTimeExpr() {
-		DateTimeBase();
-		while (la.kind == 47 || la.kind == 48) {
-			if (la.kind == 47) {
-				Get();
-			} else {
-				Get();
-			}
+		} else if (la.kind == 1 || la.kind == 4) {
+			DateTime();
+			Expect(32);
 			Duration();
-		}
+		} else if (la.kind == 1 || la.kind == 4) {
+			DateTime();
+			Expect(33);
+			Duration();
+		} else SynErr(75);
 	}
 
 	void Duration() {
@@ -439,10 +326,55 @@ public class Parser {
 		}
 	}
 
+	void ResourceExpr() {
+		if (la.kind == 1) {
+			Get();
+		} else if (la.kind == 1 || la.kind == 2 || la.kind == 27) {
+			ArithExpr();
+			Expect(34);
+			Expect(1);
+		} else if (la.kind == 1 || la.kind == 2 || la.kind == 27) {
+			ResourceExpr();
+			Expect(37);
+			ResourceExpr();
+		} else SynErr(76);
+	}
+
+	void AvailabilityExpr() {
+		ResourceExpr();
+		TimeExpr();
+		Constraint();
+		Recurrence();
+	}
+
+	void ReservationExpr() {
+		ReservationTerm();
+		while (la.kind == 29 || la.kind == 36 || la.kind == 37) {
+			if (la.kind == 37) {
+				Get();
+				ReservationTerm();
+			} else if (la.kind == 36) {
+				Get();
+				ReservationTerm();
+			} else {
+				Get();
+				ReservationTerm();
+			}
+		}
+	}
+
+	void ArgumentList() {
+		Expr();
+		while (la.kind == 29) {
+			Get();
+			Expr();
+		}
+	}
+
 	void ArithTerm() {
 		ArithFactor();
-		while (la.kind == 49 || la.kind == 50) {
-			if (la.kind == 49) {
+		while (la.kind == 34 || la.kind == 35) {
+			if (la.kind == 34) {
 				Get();
 			} else {
 				Get();
@@ -456,65 +388,108 @@ public class Parser {
 			Get();
 		} else if (la.kind == 2) {
 			Get();
-		} else if (la.kind == 16) {
+		} else if (la.kind == 27) {
 			Get();
 			ArithExpr();
-			Expect(17);
-		} else SynErr(81);
+			Expect(28);
+		} else SynErr(77);
 	}
 
 	void BoolTerm() {
 		BoolFactor();
-		while (la.kind == 24) {
+		while (la.kind == 37) {
 			Get();
 			BoolFactor();
 		}
 	}
 
-	void ResourceExpr() {
-		ResourceTerm();
-		while (la.kind == 24) {
+	void BoolFactor() {
+		if (la.kind == 38) {
 			Get();
-			ResourceTerm();
+			BoolFactor();
+		} else if (la.kind == 27) {
+			Get();
+			BoolExpr();
+			Expect(28);
+		} else if (la.kind == 1 || la.kind == 2 || la.kind == 27) {
+			Comparison();
+		} else SynErr(78);
+	}
+
+	void Comparison() {
+		ArithExpr();
+		switch (la.kind) {
+		case 39: {
+			Get();
+			ArithExpr();
+			break;
+		}
+		case 40: {
+			Get();
+			ArithExpr();
+			break;
+		}
+		case 41: {
+			Get();
+			ArithExpr();
+			break;
+		}
+		case 42: {
+			Get();
+			ArithExpr();
+			break;
+		}
+		case 43: {
+			Get();
+			ArithExpr();
+			break;
+		}
+		case 44: {
+			Get();
+			ArithExpr();
+			break;
+		}
+		default: SynErr(79); break;
 		}
 	}
 
 	void Constraint() {
-		if (la.kind == 52) {
+		if (la.kind == 46) {
 			Get();
-			Expect(16);
+			Expect(27);
 			IdentList();
-			Expect(17);
+			Expect(28);
 			BoolExpr();
 		}
 	}
 
 	void Recurrence() {
-		if (la.kind == 65) {
+		if (la.kind == 62) {
 			Get();
-			if (la.kind == 68 || la.kind == 69) {
+			if (la.kind == 65 || la.kind == 66) {
 				RecurrenceMode();
 			}
-			Expect(66);
+			Expect(63);
 			Duration();
-			if (la.kind == 67) {
+			if (la.kind == 64) {
 				Get();
-				DateTimeExpr();
-			} else if (la.kind == 46) {
+				DateTime();
+			} else if (la.kind == 49) {
 				Get();
 				Duration();
-			} else SynErr(82);
+			} else SynErr(80);
 		}
 	}
 
-	void ResourceTerm() {
-		if (la.kind == 2) {
+	void ReservationTerm() {
+		if (la.kind == 45) {
 			Get();
-			Expect(49);
-			Expect(1);
-		} else if (la.kind == 1) {
+			AvailabilityExpr();
+		} else if (la.kind == 27) {
 			Get();
-		} else SynErr(83);
+			ReservationExpr();
+			Expect(28);
+		} else SynErr(81);
 	}
 
 	void IdentList() {
@@ -524,26 +499,29 @@ public class Parser {
 		}
 	}
 
-	void DateTimeBase() {
-		if (la.kind == 4) {
-			Get();
-			Expect(5);
-		} else if (la.kind == 1) {
-			Get();
-		} else SynErr(84);
-	}
-
 	void DurationAtom() {
 		if (la.kind == 2) {
 			Get();
 			DurationUnit();
 		} else if (la.kind == 1) {
 			Get();
-		} else SynErr(85);
+		} else SynErr(82);
 	}
 
 	void DurationUnit() {
 		switch (la.kind) {
+		case 50: {
+			Get();
+			break;
+		}
+		case 51: {
+			Get();
+			break;
+		}
+		case 52: {
+			Get();
+			break;
+		}
 		case 53: {
 			Get();
 			break;
@@ -580,28 +558,16 @@ public class Parser {
 			Get();
 			break;
 		}
-		case 62: {
-			Get();
-			break;
-		}
-		case 63: {
-			Get();
-			break;
-		}
-		case 64: {
-			Get();
-			break;
-		}
-		default: SynErr(86); break;
+		default: SynErr(83); break;
 		}
 	}
 
 	void RecurrenceMode() {
-		if (la.kind == 68) {
+		if (la.kind == 65) {
 			Get();
-		} else if (la.kind == 69) {
+		} else if (la.kind == 66) {
 			Get();
-		} else SynErr(87);
+		} else SynErr(84);
 	}
 
 
@@ -616,13 +582,12 @@ public class Parser {
 	}
 	
 	static readonly bool[,] set = {
-		{_T,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x},
-		{_x,_T,_x,_x, _x,_x,_x,_T, _T,_x,_x,_x, _x,_x,_T,_T, _x,_x,_T,_T, _T,_x,_x,_T, _x,_x,_x,_T, _T,_T,_T,_T, _T,_T,_T,_T, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x},
-		{_x,_T,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _T,_x,_x,_T, _x,_x,_x,_T, _T,_T,_T,_T, _T,_T,_T,_T, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x},
-		{_x,_T,_T,_T, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _T,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _T,_T,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x},
-		{_x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_T, _T,_T,_T,_T, _T,_T,_T,_T, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x},
-		{_x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_T,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_T,_T, _T,_T,_T,_T, _T,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x},
-		{_x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_T,_T, _T,_T,_T,_T, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x}
+		{_T,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x},
+		{_x,_T,_T,_x, _T,_x,_x,_x, _x,_T,_T,_x, _x,_x,_T,_T, _T,_T,_T,_T, _T,_T,_T,_x, _x,_T,_T,_T, _x,_x,_T,_T, _x,_x,_x,_x, _x,_x,_T,_x, _x,_x,_x,_x, _x,_T,_x,_T, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x},
+		{_x,_T,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_T,_T, _T,_T,_T,_T, _T,_T,_T,_x, _x,_T,_T,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x},
+		{_x,_T,_T,_x, _T,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_T, _x,_x,_T,_T, _x,_x,_x,_x, _x,_x,_T,_x, _x,_x,_x,_x, _x,_T,_x,_T, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x},
+		{_x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_T,_T, _T,_T,_T,_T, _T,_T,_T,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x},
+		{_x,_T,_T,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_T, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_T,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x,_x,_x,_x, _x}
 
 	};
 } // end Parser
@@ -643,87 +608,84 @@ public class Errors {
 			case 4: s = "dateLit expected"; break;
 			case 5: s = "timeLit expected"; break;
 			case 6: s = "\";\" expected"; break;
-			case 7: s = "\"cancel\" expected"; break;
-			case 8: s = "\"if\" expected"; break;
-			case 9: s = "\"then\" expected"; break;
-			case 10: s = "\"else\" expected"; break;
-			case 11: s = "\"is\" expected"; break;
-			case 12: s = "\"a\" expected"; break;
+			case 7: s = "\"is\" expected"; break;
+			case 8: s = "\"a\" expected"; break;
+			case 9: s = "\"cancel\" expected"; break;
+			case 10: s = "\"if\" expected"; break;
+			case 11: s = "\"then\" expected"; break;
+			case 12: s = "\"else\" expected"; break;
 			case 13: s = "\":=\" expected"; break;
-			case 14: s = "\"reschedule\" expected"; break;
-			case 15: s = "\"use\" expected"; break;
-			case 16: s = "\"(\" expected"; break;
-			case 17: s = "\")\" expected"; break;
-			case 18: s = "\"reserve\" expected"; break;
-			case 19: s = "\"available\" expected"; break;
-			case 20: s = "\"category\" expected"; break;
-			case 21: s = "\"{\" expected"; break;
-			case 22: s = "\"}\" expected"; break;
-			case 23: s = "\"template\" expected"; break;
-			case 24: s = "\"and\" expected"; break;
-			case 25: s = "\"or\" expected"; break;
-			case 26: s = "\",\" expected"; break;
-			case 27: s = "\"Resource\" expected"; break;
-			case 28: s = "\"Reservation\" expected"; break;
-			case 29: s = "\"TimePeriod\" expected"; break;
-			case 30: s = "\"DateTime\" expected"; break;
-			case 31: s = "\"Duration\" expected"; break;
-			case 32: s = "\"int\" expected"; break;
-			case 33: s = "\"bool\" expected"; break;
-			case 34: s = "\"string\" expected"; break;
-			case 35: s = "\"float\" expected"; break;
-			case 36: s = "\"true\" expected"; break;
-			case 37: s = "\"false\" expected"; break;
-			case 38: s = "\"==\" expected"; break;
-			case 39: s = "\"!=\" expected"; break;
-			case 40: s = "\"<\" expected"; break;
-			case 41: s = "\"<=\" expected"; break;
-			case 42: s = "\">\" expected"; break;
-			case 43: s = "\">=\" expected"; break;
-			case 44: s = "\"from\" expected"; break;
-			case 45: s = "\"to\" expected"; break;
-			case 46: s = "\"for\" expected"; break;
-			case 47: s = "\"+\" expected"; break;
-			case 48: s = "\"-\" expected"; break;
-			case 49: s = "\"*\" expected"; break;
-			case 50: s = "\"/\" expected"; break;
-			case 51: s = "\"not\" expected"; break;
-			case 52: s = "\"where\" expected"; break;
-			case 53: s = "\"weeks\" expected"; break;
-			case 54: s = "\"week\" expected"; break;
-			case 55: s = "\"w\" expected"; break;
-			case 56: s = "\"days\" expected"; break;
-			case 57: s = "\"day\" expected"; break;
-			case 58: s = "\"d\" expected"; break;
-			case 59: s = "\"hours\" expected"; break;
-			case 60: s = "\"hour\" expected"; break;
-			case 61: s = "\"h\" expected"; break;
-			case 62: s = "\"minutes\" expected"; break;
-			case 63: s = "\"minute\" expected"; break;
-			case 64: s = "\"min\" expected"; break;
-			case 65: s = "\"recurring\" expected"; break;
-			case 66: s = "\"every\" expected"; break;
-			case 67: s = "\"until\" expected"; break;
-			case 68: s = "\"strict\" expected"; break;
-			case 69: s = "\"flexible\" expected"; break;
-			case 70: s = "??? expected"; break;
-			case 71: s = "invalid Statement"; break;
-			case 72: s = "invalid Decl"; break;
-			case 73: s = "invalid Expr"; break;
+			case 14: s = "\"Resource\" expected"; break;
+			case 15: s = "\"Reservation\" expected"; break;
+			case 16: s = "\"TimePeriod\" expected"; break;
+			case 17: s = "\"DateTime\" expected"; break;
+			case 18: s = "\"Duration\" expected"; break;
+			case 19: s = "\"int\" expected"; break;
+			case 20: s = "\"bool\" expected"; break;
+			case 21: s = "\"string\" expected"; break;
+			case 22: s = "\"float\" expected"; break;
+			case 23: s = "\"{\" expected"; break;
+			case 24: s = "\"}\" expected"; break;
+			case 25: s = "\"category\" expected"; break;
+			case 26: s = "\"template\" expected"; break;
+			case 27: s = "\"(\" expected"; break;
+			case 28: s = "\")\" expected"; break;
+			case 29: s = "\",\" expected"; break;
+			case 30: s = "\"reschedule\" expected"; break;
+			case 31: s = "\"use\" expected"; break;
+			case 32: s = "\"+\" expected"; break;
+			case 33: s = "\"-\" expected"; break;
+			case 34: s = "\"*\" expected"; break;
+			case 35: s = "\"/\" expected"; break;
+			case 36: s = "\"or\" expected"; break;
+			case 37: s = "\"and\" expected"; break;
+			case 38: s = "\"not\" expected"; break;
+			case 39: s = "\"==\" expected"; break;
+			case 40: s = "\"!=\" expected"; break;
+			case 41: s = "\"<\" expected"; break;
+			case 42: s = "\"<=\" expected"; break;
+			case 43: s = "\">\" expected"; break;
+			case 44: s = "\">=\" expected"; break;
+			case 45: s = "\"reserve\" expected"; break;
+			case 46: s = "\"where\" expected"; break;
+			case 47: s = "\"from\" expected"; break;
+			case 48: s = "\"to\" expected"; break;
+			case 49: s = "\"for\" expected"; break;
+			case 50: s = "\"weeks\" expected"; break;
+			case 51: s = "\"week\" expected"; break;
+			case 52: s = "\"w\" expected"; break;
+			case 53: s = "\"days\" expected"; break;
+			case 54: s = "\"day\" expected"; break;
+			case 55: s = "\"d\" expected"; break;
+			case 56: s = "\"hours\" expected"; break;
+			case 57: s = "\"hour\" expected"; break;
+			case 58: s = "\"h\" expected"; break;
+			case 59: s = "\"minutes\" expected"; break;
+			case 60: s = "\"minute\" expected"; break;
+			case 61: s = "\"min\" expected"; break;
+			case 62: s = "\"recurring\" expected"; break;
+			case 63: s = "\"every\" expected"; break;
+			case 64: s = "\"until\" expected"; break;
+			case 65: s = "\"strict\" expected"; break;
+			case 66: s = "\"flexible\" expected"; break;
+			case 67: s = "??? expected"; break;
+			case 68: s = "invalid Statement"; break;
+			case 69: s = "invalid Decl"; break;
+			case 70: s = "invalid Expr"; break;
+			case 71: s = "invalid VarDecl"; break;
+			case 72: s = "invalid Type"; break;
+			case 73: s = "invalid BaseType"; break;
 			case 74: s = "invalid TimeExpr"; break;
-			case 75: s = "invalid ReservationOp"; break;
-			case 76: s = "invalid Type"; break;
-			case 77: s = "invalid BoolTail"; break;
-			case 78: s = "invalid TimeTail"; break;
-			case 79: s = "invalid BoolFactor"; break;
-			case 80: s = "invalid BoolFactor"; break;
-			case 81: s = "invalid ArithFactor"; break;
-			case 82: s = "invalid Recurrence"; break;
-			case 83: s = "invalid ResourceTerm"; break;
-			case 84: s = "invalid DateTimeBase"; break;
-			case 85: s = "invalid DurationAtom"; break;
-			case 86: s = "invalid DurationUnit"; break;
-			case 87: s = "invalid RecurrenceMode"; break;
+			case 75: s = "invalid DateTime"; break;
+			case 76: s = "invalid ResourceExpr"; break;
+			case 77: s = "invalid ArithFactor"; break;
+			case 78: s = "invalid BoolFactor"; break;
+			case 79: s = "invalid Comparison"; break;
+			case 80: s = "invalid Recurrence"; break;
+			case 81: s = "invalid ReservationTerm"; break;
+			case 82: s = "invalid DurationAtom"; break;
+			case 83: s = "invalid DurationUnit"; break;
+			case 84: s = "invalid RecurrenceMode"; break;
 
 			default: s = "error " + n; break;
 		}

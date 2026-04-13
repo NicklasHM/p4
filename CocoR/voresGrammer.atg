@@ -26,43 +26,55 @@ PRODUCTIONS
 
   Statement =
       Decl
-    | "cancel" ident
-    | "if" BoolExpr "then" Statement [ "else" Statement ]
+    | Expr
     | ident "is" "a" ident
-    | ident ":=" Expr
-    | "reschedule" ident TimeExpr
-    | "use" ident "(" [ ArgumentList ] ")"
-    | "reserve" AvailabilityExpr { ReservationOp AvailabilityExpr }
-    | "available" AvailabilityExpr
+    | "cancel" ident
+    | "if" BoolExpr "then" Statement "else" Statement
+    | "if" BoolExpr "then" Statement
   .
 
   Decl =
-      Type ident [ ":=" Expr ]
-    | "category" ident [ "is" "a" ident ]
-    | ident ident "{" { VarDecl ";" } "}"
-    | "template" ident "(" [ ParamList ] ")" "{" { Statement ";" } "}"
+      VarDecl
+    | ResourceDecl
+    | CategoryDecl
+    | TemplateDecl
   .
 
   VarDecl =
-    Type ident [ ":=" Expr ]
-  .
-
-  ReservationOp =
-      "and"
-    | "or"
-    | ","
+      Type ident
+    | Type ident ":=" Expr
   .
 
   Type =
-      "Resource"
+      BaseType
+    | "Resource"
     | "Reservation"
     | "TimePeriod"
     | "DateTime"
     | "Duration"
-    | "int"
+  .
+
+  BaseType =
+      "int"
     | "bool"
     | "string"
     | "float"
+  .
+
+  ResourceDecl =
+    ident ident "{"
+      { VarDecl ";" }
+    "}"
+  .
+
+  CategoryDecl =
+    "category" ident [ "is" "a" ident ]
+  .
+
+  TemplateDecl =
+    "template" ident "(" [ ParamList ] ")" "{"
+      { Statement ";" }
+    "}"
   .
 
   ParamList =
@@ -73,28 +85,22 @@ PRODUCTIONS
     Type ident
   .
 
+  Expr =
+      ident ":=" Expr
+    | ArithExpr
+    | BoolExpr
+    | TimeExpr
+    | DateTime
+    | Duration
+    | ResourceExpr
+    | AvailabilityExpr
+    | ReservationExpr
+    | "reschedule" ident TimeExpr
+    | "use" ident "(" [ ArgumentList ] ")"
+  .
+
   ArgumentList =
     Expr { "," Expr }
-  .
-
-  Expr =
-      ArithExpr [ AssignTail | BoolTail | TimeTail ]
-    | "true"
-    | "false"
-    | stringLit
-  .
-
-  AssignTail =
-    ":=" Expr
-  .
-
-  BoolTail =
-    ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) ArithExpr
-    { ( "and" | "or" ) BoolFactor }
-  .
-
-  TimeTail =
-    "from" DateTimeExpr ( "to" DateTimeExpr | "for" Duration )
   .
 
   ArithExpr =
@@ -122,20 +128,43 @@ PRODUCTIONS
   BoolFactor =
       "not" BoolFactor
     | "(" BoolExpr ")"
-    | ArithExpr ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) ArithExpr
+    | Comparison
+  .
+
+  Comparison =
+    ArithExpr
+    (
+        "==" ArithExpr
+      | "!=" ArithExpr
+      | "<"  ArithExpr
+      | "<=" ArithExpr
+      | ">"  ArithExpr
+      | ">=" ArithExpr
+    )
+  .
+
+  ResourceExpr =
+      ident
+    | ArithExpr "*" ident
+    | ResourceExpr "and" ResourceExpr
   .
 
   AvailabilityExpr =
     ResourceExpr TimeExpr Constraint Recurrence
   .
 
-  ResourceExpr =
-    ResourceTerm { "and" ResourceTerm }
+  ReservationExpr =
+    ReservationTerm
+    {
+        "and" ReservationTerm
+      | "or"  ReservationTerm
+      | ","   ReservationTerm
+    }
   .
 
-  ResourceTerm =
-      number "*" ident
-    | ident
+  ReservationTerm =
+      "reserve" AvailabilityExpr
+    | "(" ReservationExpr ")"
   .
 
   Constraint =
@@ -147,20 +176,18 @@ PRODUCTIONS
   .
 
   TimeExpr =
-    "from" DateTimeExpr
+    "from" DateTime
     (
-        "to" DateTimeExpr
+        "to" DateTime
       | "for" Duration
     )
   .
 
-  DateTimeExpr =
-    DateTimeBase { ( "+" | "-" ) Duration }
-  .
-
-  DateTimeBase =
+  DateTime =
       dateLit timeLit
     | ident
+    | DateTime "+" Duration
+    | DateTime "-" Duration
   .
 
   Duration =
@@ -183,7 +210,7 @@ PRODUCTIONS
     [
       "recurring" [ RecurrenceMode ] "every" Duration
       (
-          "until" DateTimeExpr
+          "until" DateTime
         | "for"   Duration
       )
     ]

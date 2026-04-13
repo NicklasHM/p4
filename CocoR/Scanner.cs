@@ -203,8 +203,8 @@ public class UTF8Buffer: Buffer {
 public class Scanner {
 	const char EOL = '\n';
 	const int eofSym = 0; /* pdt */
-	const int maxT = 70;
-	const int noSym = 70;
+	const int maxT = 67;
+	const int noSym = 67;
 
 
 	public Buffer buffer; // scanner buffer
@@ -232,19 +232,19 @@ public class Scanner {
 		start[34] = 3; 
 		start[59] = 18; 
 		start[58] = 19; 
-		start[40] = 21; 
-		start[41] = 22; 
-		start[123] = 23; 
-		start[125] = 24; 
+		start[123] = 21; 
+		start[125] = 22; 
+		start[40] = 23; 
+		start[41] = 24; 
 		start[44] = 25; 
-		start[61] = 26; 
-		start[33] = 28; 
+		start[43] = 26; 
+		start[45] = 27; 
+		start[42] = 28; 
+		start[47] = 29; 
+		start[61] = 30; 
+		start[33] = 32; 
 		start[60] = 36; 
 		start[62] = 37; 
-		start[43] = 32; 
-		start[45] = 33; 
-		start[42] = 34; 
-		start[47] = 35; 
 		start[Buffer.EOF] = -1;
 
 	}
@@ -311,53 +311,50 @@ public class Scanner {
 
 	void CheckLiteral() {
 		switch (t.val) {
-			case "cancel": t.kind = 7; break;
-			case "if": t.kind = 8; break;
-			case "then": t.kind = 9; break;
-			case "else": t.kind = 10; break;
-			case "is": t.kind = 11; break;
-			case "a": t.kind = 12; break;
-			case "reschedule": t.kind = 14; break;
-			case "use": t.kind = 15; break;
-			case "reserve": t.kind = 18; break;
-			case "available": t.kind = 19; break;
-			case "category": t.kind = 20; break;
-			case "template": t.kind = 23; break;
-			case "and": t.kind = 24; break;
-			case "or": t.kind = 25; break;
-			case "Resource": t.kind = 27; break;
-			case "Reservation": t.kind = 28; break;
-			case "TimePeriod": t.kind = 29; break;
-			case "DateTime": t.kind = 30; break;
-			case "Duration": t.kind = 31; break;
-			case "int": t.kind = 32; break;
-			case "bool": t.kind = 33; break;
-			case "string": t.kind = 34; break;
-			case "float": t.kind = 35; break;
-			case "true": t.kind = 36; break;
-			case "false": t.kind = 37; break;
-			case "from": t.kind = 44; break;
-			case "to": t.kind = 45; break;
-			case "for": t.kind = 46; break;
-			case "not": t.kind = 51; break;
-			case "where": t.kind = 52; break;
-			case "weeks": t.kind = 53; break;
-			case "week": t.kind = 54; break;
-			case "w": t.kind = 55; break;
-			case "days": t.kind = 56; break;
-			case "day": t.kind = 57; break;
-			case "d": t.kind = 58; break;
-			case "hours": t.kind = 59; break;
-			case "hour": t.kind = 60; break;
-			case "h": t.kind = 61; break;
-			case "minutes": t.kind = 62; break;
-			case "minute": t.kind = 63; break;
-			case "min": t.kind = 64; break;
-			case "recurring": t.kind = 65; break;
-			case "every": t.kind = 66; break;
-			case "until": t.kind = 67; break;
-			case "strict": t.kind = 68; break;
-			case "flexible": t.kind = 69; break;
+			case "is": t.kind = 7; break;
+			case "a": t.kind = 8; break;
+			case "cancel": t.kind = 9; break;
+			case "if": t.kind = 10; break;
+			case "then": t.kind = 11; break;
+			case "else": t.kind = 12; break;
+			case "Resource": t.kind = 14; break;
+			case "Reservation": t.kind = 15; break;
+			case "TimePeriod": t.kind = 16; break;
+			case "DateTime": t.kind = 17; break;
+			case "Duration": t.kind = 18; break;
+			case "int": t.kind = 19; break;
+			case "bool": t.kind = 20; break;
+			case "string": t.kind = 21; break;
+			case "float": t.kind = 22; break;
+			case "category": t.kind = 25; break;
+			case "template": t.kind = 26; break;
+			case "reschedule": t.kind = 30; break;
+			case "use": t.kind = 31; break;
+			case "or": t.kind = 36; break;
+			case "and": t.kind = 37; break;
+			case "not": t.kind = 38; break;
+			case "reserve": t.kind = 45; break;
+			case "where": t.kind = 46; break;
+			case "from": t.kind = 47; break;
+			case "to": t.kind = 48; break;
+			case "for": t.kind = 49; break;
+			case "weeks": t.kind = 50; break;
+			case "week": t.kind = 51; break;
+			case "w": t.kind = 52; break;
+			case "days": t.kind = 53; break;
+			case "day": t.kind = 54; break;
+			case "d": t.kind = 55; break;
+			case "hours": t.kind = 56; break;
+			case "hour": t.kind = 57; break;
+			case "h": t.kind = 58; break;
+			case "minutes": t.kind = 59; break;
+			case "minute": t.kind = 60; break;
+			case "min": t.kind = 61; break;
+			case "recurring": t.kind = 62; break;
+			case "every": t.kind = 63; break;
+			case "until": t.kind = 64; break;
+			case "strict": t.kind = 65; break;
+			case "flexible": t.kind = 66; break;
 			default: break;
 		}
 	}
@@ -448,45 +445,45 @@ public class Scanner {
 			case 20:
 				{t.kind = 13; break;}
 			case 21:
-				{t.kind = 16; break;}
+				{t.kind = 23; break;}
 			case 22:
-				{t.kind = 17; break;}
+				{t.kind = 24; break;}
 			case 23:
-				{t.kind = 21; break;}
+				{t.kind = 27; break;}
 			case 24:
-				{t.kind = 22; break;}
+				{t.kind = 28; break;}
 			case 25:
-				{t.kind = 26; break;}
+				{t.kind = 29; break;}
 			case 26:
-				if (ch == '=') {AddCh(); goto case 27;}
-				else {goto case 0;}
+				{t.kind = 32; break;}
 			case 27:
-				{t.kind = 38; break;}
+				{t.kind = 33; break;}
 			case 28:
-				if (ch == '=') {AddCh(); goto case 29;}
-				else {goto case 0;}
+				{t.kind = 34; break;}
 			case 29:
-				{t.kind = 39; break;}
+				{t.kind = 35; break;}
 			case 30:
-				{t.kind = 41; break;}
-			case 31:
-				{t.kind = 43; break;}
-			case 32:
-				{t.kind = 47; break;}
-			case 33:
-				{t.kind = 48; break;}
-			case 34:
-				{t.kind = 49; break;}
-			case 35:
-				{t.kind = 50; break;}
-			case 36:
-				recEnd = pos; recKind = 40;
-				if (ch == '=') {AddCh(); goto case 30;}
-				else {t.kind = 40; break;}
-			case 37:
-				recEnd = pos; recKind = 42;
 				if (ch == '=') {AddCh(); goto case 31;}
-				else {t.kind = 42; break;}
+				else {goto case 0;}
+			case 31:
+				{t.kind = 39; break;}
+			case 32:
+				if (ch == '=') {AddCh(); goto case 33;}
+				else {goto case 0;}
+			case 33:
+				{t.kind = 40; break;}
+			case 34:
+				{t.kind = 42; break;}
+			case 35:
+				{t.kind = 44; break;}
+			case 36:
+				recEnd = pos; recKind = 41;
+				if (ch == '=') {AddCh(); goto case 34;}
+				else {t.kind = 41; break;}
+			case 37:
+				recEnd = pos; recKind = 43;
+				if (ch == '=') {AddCh(); goto case 35;}
+				else {t.kind = 43; break;}
 
 		}
 		t.val = new String(tval, 0, tlen);
