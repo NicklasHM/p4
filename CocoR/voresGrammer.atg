@@ -1,0 +1,197 @@
+COMPILER ResourceAvailability
+
+CHARACTERS
+  letter     = 'A'..'Z' + 'a'..'z' .
+  digit      = '0'..'9' .
+  underscore = '_' .
+  dash       = '-' .
+  space      = ' ' .
+  slash      = '/' .
+  colon      = ':' .
+
+TOKENS
+  ident     = letter { letter | digit | underscore } .
+  number    = digit { digit } .
+  stringLit = '"' { letter | digit | space | underscore | dash } '"' .
+  dateLit   = digit digit slash digit digit dash digit digit digit digit .
+  timeLit   = digit digit colon digit digit .
+
+IGNORE '\r' + '\n' + '\t' + ' '
+
+PRODUCTIONS
+
+  ResourceAvailability =
+    { Statement ";" } EOF
+  .
+
+  Statement =
+      Decl
+    | "cancel" ident
+    | "if" BoolExpr "then" Statement [ "else" Statement ]
+    | ident "is" "a" ident
+    | ident ":=" Expr
+    | "reschedule" ident TimeExpr
+    | "use" ident "(" [ ArgumentList ] ")"
+    | "reserve" AvailabilityExpr { ReservationOp AvailabilityExpr }
+    | "available" AvailabilityExpr
+  .
+
+  Decl =
+      Type ident [ ":=" Expr ]
+    | "category" ident [ "is" "a" ident ]
+    | ident ident "{" { VarDecl ";" } "}"
+    | "template" ident "(" [ ParamList ] ")" "{" { Statement ";" } "}"
+  .
+
+  VarDecl =
+    Type ident [ ":=" Expr ]
+  .
+
+  ReservationOp =
+      "and"
+    | "or"
+    | ","
+  .
+
+  Type =
+      "Resource"
+    | "Reservation"
+    | "TimePeriod"
+    | "DateTime"
+    | "Duration"
+    | "int"
+    | "bool"
+    | "string"
+    | "float"
+  .
+
+  ParamList =
+    Param { "," Param }
+  .
+
+  Param =
+    Type ident
+  .
+
+  ArgumentList =
+    Expr { "," Expr }
+  .
+
+  Expr =
+      ArithExpr [ AssignTail | BoolTail | TimeTail ]
+    | "true"
+    | "false"
+    | stringLit
+  .
+
+  AssignTail =
+    ":=" Expr
+  .
+
+  BoolTail =
+    ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) ArithExpr
+    { ( "and" | "or" ) BoolFactor }
+  .
+
+  TimeTail =
+    "from" DateTimeExpr ( "to" DateTimeExpr | "for" Duration )
+  .
+
+  ArithExpr =
+    ArithTerm { ( "+" | "-" ) ArithTerm }
+  .
+
+  ArithTerm =
+    ArithFactor { ( "*" | "/" ) ArithFactor }
+  .
+
+  ArithFactor =
+      ident
+    | number
+    | "(" ArithExpr ")"
+  .
+
+  BoolExpr =
+    BoolTerm { "or" BoolTerm }
+  .
+
+  BoolTerm =
+    BoolFactor { "and" BoolFactor }
+  .
+
+  BoolFactor =
+      "not" BoolFactor
+    | "(" BoolExpr ")"
+    | ArithExpr ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) ArithExpr
+  .
+
+  AvailabilityExpr =
+    ResourceExpr TimeExpr Constraint Recurrence
+  .
+
+  ResourceExpr =
+    ResourceTerm { "and" ResourceTerm }
+  .
+
+  ResourceTerm =
+      number "*" ident
+    | ident
+  .
+
+  Constraint =
+    [ "where" "(" IdentList ")" BoolExpr ]
+  .
+
+  IdentList =
+    ident { ident }
+  .
+
+  TimeExpr =
+    "from" DateTimeExpr
+    (
+        "to" DateTimeExpr
+      | "for" Duration
+    )
+  .
+
+  DateTimeExpr =
+    DateTimeBase { ( "+" | "-" ) Duration }
+  .
+
+  DateTimeBase =
+      dateLit timeLit
+    | ident
+  .
+
+  Duration =
+    DurationAtom { DurationAtom }
+  .
+
+  DurationAtom =
+      number DurationUnit
+    | ident
+  .
+
+  DurationUnit =
+      "weeks" | "week" | "w"
+    | "days"  | "day"  | "d"
+    | "hours" | "hour" | "h"
+    | "minutes" | "minute" | "min"
+  .
+
+  Recurrence =
+    [
+      "recurring" [ RecurrenceMode ] "every" Duration
+      (
+          "until" DateTimeExpr
+        | "for"   Duration
+      )
+    ]
+  .
+
+  RecurrenceMode =
+      "strict"
+    | "flexible"
+  .
+
+END ResourceAvailability.

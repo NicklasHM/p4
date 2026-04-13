@@ -1,0 +1,1 @@
+Man skal lige prøve at køre coco.exe for at tjekke man har downloaded .net til ens computer. Eller så skriv ./Coco.exe voresGrammer.atg for at køre coco at få en ny code udfra det grammar som er givet.
