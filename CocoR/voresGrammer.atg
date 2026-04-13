@@ -1,3 +1,8 @@
+/* The EBNF uses the following extensions: */
+/* [] Brackets mean that the string is written zero or one times.  */
+/* {} Curly brackets mean that the string is repeated zero or more times  */
+/* () is a grouping used alongside |. The parenthesis contains a series of strings separated by |. This means that exactly one of the strings is chosen. */
+
 COMPILER ResourceAvailability
 
 CHARACTERS
