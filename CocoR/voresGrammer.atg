@@ -164,11 +164,19 @@ PRODUCTIONS
     "check" QueryExpr
   .
 
-  ReservationExpr =
-    ReservationTerm { ( "and" | "or" | "," ) ReservationTerm } /*operator precedence needs attention*/
+  ReservationExpr =                 /*  rsrvE  with operator precedence low -> high:  choice(or) - both(and) - best effort(,) - atom(reserve) | parenthesis() */
+    ReservationConjExpr { "or" ReservationExpr } 
   .
 
-  ReservationTerm =
+   ReservationConjExpr =
+      ReservationSeqExpr { "and" ReservationConjExpr}
+  .
+
+   ReservationSeqExpr =
+      ReservationAtomExpr { "," ReservationSeqExpr}
+  .
+
+  ReservationAtomExpr =
       "reserve" QueryExpr
     | "(" ReservationExpr ")"
   .
