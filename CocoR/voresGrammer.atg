@@ -1,7 +1,7 @@
 /* The EBNF uses the following extensions: */
-/* [] Brackets mean that the string is written zero or one times.  */
-/* {} Curly brackets mean that the string is repeated zero or more times  */
-/* () is a grouping used alongside |. The parenthesis contains a series of strings separated by |. This means that exactly one of the strings is chosen. */
+/* [] zero or one times.  */
+/* {} zero or more times  */
+/* () grouping used alongside |. The parenthesis contains a series of strings separated by |. This means that exactly one of the strings is chosen. */
 
 COMPILER ResourceAvailability
 
@@ -15,11 +15,14 @@ CHARACTERS
   colon      = ':' .
 
 TOKENS
-  ident     = letter { letter | digit | underscore } .
+  ident     = (letter | underscore) { letter | digit | underscore } .
   number    = digit { digit } .
   stringLit = '"' { letter | digit | space | underscore | dash } '"' .
   dateLit   = digit digit slash digit digit dash digit digit digit digit .
   timeLit   = digit digit colon digit digit .
+
+COMMENTS FROM "/*" TO "*/" NESTED  /* Nested means: "There can be comments inside comments" */
+COMMENTS FROM "//" TO '\n'
 
 IGNORE '\r' + '\n' + '\t' + ' '
 
@@ -32,8 +35,8 @@ PRODUCTIONS
   Statement =
     (  Decl
     | Expr
-    | ident "is" "a" ident
-    | "cancel" ident
+    | ident "move" "to" ident /*  r move to rc  */
+    | "cancel" ident          /*  rsrv */
     | "if" "(" BoolExpr ")" "then" {Statement} ["else" {Statement}]
     ) ";"
   .
@@ -90,7 +93,8 @@ PRODUCTIONS
   .
 
   Expr =
-      ident ":=" Expr
+     "(" Expr ")"
+    | ident [ ":=" Expr ]
     | ArithExpr
     | BoolExpr
     | TimeExpr
@@ -116,9 +120,7 @@ PRODUCTIONS
   .
 
   ArithFactor =
-      ident
-    | number
-    | "(" ArithExpr ")"
+    number
   .
 
   BoolExpr =
@@ -131,7 +133,6 @@ PRODUCTIONS
 
   BoolFactor =
       "not" BoolFactor
-    | "(" BoolExpr ")"
     | Comparison
   .
 
@@ -147,16 +148,13 @@ PRODUCTIONS
     )
   .
 
-  ResourceExpr =                     /*x?*/
-    (
-      ident                          /*  r:          a declared resource*/
-      | ArithExpr ident ident        /*  a*rc id:    a quantity of a category with local variable binding for constraints  */
-    )
-    { "and" ResourceExpr }           /* Re and Re:   composite without left recursion */
+  ResourceExpr =
+      ArithExpr ResourceExpr /*x, r (a declared resource), a*rc id (a quantity of a category with local variable binding for constraints)*/
+    { "and" ResourceExpr }   /* Re and Re:   composite without left recursion */
   .
 
   QueryExpr =
-    ResourceExpr TimeExpr Constraint Recurrence
+    ResourceExpr TimeExpr [ "where" BoolExpr ] Recurrence
   .
 
   AvailabilityExpr =
@@ -177,11 +175,6 @@ PRODUCTIONS
 
   ReservationAtomExpr =
       "reserve" QueryExpr
-    | "(" ReservationExpr ")"
-  .
-
-  Constraint =
-    [ "where" BoolExpr ]
   .
 
   TimeExpr = "from" DateTime ("to" DateTime | "for" Duration) .
@@ -197,8 +190,6 @@ PRODUCTIONS
 
   Duration = ( U | ident | ArithExpr U ) { ( U | ident | ArithExpr U ) } .
 
-  Recurrence = [ "recurring" Mode "every" Duration ( "until" DateTime | "for" Duration ) ] .
-
-  Mode = "strict" | "flexible" .
+  Recurrence = [ "recurring" ( "strict" | "flexible" ) "every" Duration ( "until" DateTime | "for" Duration ) ] .
 
 END ResourceAvailability.
