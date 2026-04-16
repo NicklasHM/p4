@@ -46,8 +46,7 @@ PRODUCTIONS
   .
 
   VarDecl =
-      Type ident
-    | Type ident ":=" Expr
+    Type ident [ ":=" Expr ]
   .
 
   Type =
