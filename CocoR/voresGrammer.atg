@@ -12,6 +12,12 @@ bool IsParenBool() {
     return t.kind == _not;
 }
 
+bool isIndentBool(){
+  scanner.ResetPeek();
+  token t = scanner.peek();
+  return t.kind == _assign;
+}
+
 CHARACTERS
   letter     = 'A'..'Z' + 'a'..'z' .
   digit      = '0'..'9' .
@@ -99,7 +105,7 @@ PRODUCTIONS
   .
 
   Expr =
-      ident ":=" Expr
+     IF(isIndentBool()) ident ":=" Expr
     | ArithExpr
     | BoolExpr
     | TimeExpr

@@ -29,6 +29,12 @@ bool IsParenBool() {
     return t.kind == _not;
 }
 
+bool isIndentBool(){
+  scanner.ResetPeek();
+  token t = scanner.peek();
+  return t.kind == :assign;
+}
+
 
 
 	public Parser(Scanner scanner) {
@@ -137,8 +143,8 @@ bool IsParenBool() {
 	}
 
 	void Expr() {
-		if (la.kind == 1) {
-			Get();
+		if (isIndentBool()) {
+			Expect(1);
 			Expect(13);
 			Expr();
 		} else if (la.kind == 1 || la.kind == 2 || la.kind == 27) {
