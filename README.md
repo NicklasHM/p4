@@ -51,8 +51,8 @@ dotnet run -- yourfile.ra
 category Room;
 category DoubleRoom is a Room;
 DoubleRoom room205 {
-bool seaView;
-int floor;
+  bool seaView;
+  int floor;
 };
 check room205 from 15/03-2026 14:00 to 17/03-2026 12:00;
 ```
