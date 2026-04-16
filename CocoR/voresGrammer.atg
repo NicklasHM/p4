@@ -185,50 +185,16 @@ PRODUCTIONS
     [ "where" BoolExpr ]
   .
 
-  TimeExpr =
-    "from" DateTime
-    (
-        "to" DateTime
-      | "for" Duration
-    )
-  .
+  TimeExpr = "from" DateTime ("to" DateTime | "for" Duration) .
 
-  DateTime =
-      dateLit timeLit
-    | ident
-    | DateTime "+" Duration
-    | DateTime "-" Duration
-  .
+  DateTime = ( dateLit timeLit | ident ) { ("+" | "-") Duration } .
 
-  Duration =
-    DurationAtom { DurationAtom }
-  .
+  U = "w" | "d" | "h" | "m" .
 
-  DurationAtom =
-      number DurationUnit
-    | ident
-  .
+  Duration = ( U | ident | ArithExpr U ) { ( U | ident | ArithExpr U ) } .
 
-  DurationUnit =
-      "weeks" | "week" | "w"
-    | "days"  | "day"  | "d"
-    | "hours" | "hour" | "h"
-    | "minutes" | "minute" | "min"
-  .
+  Recurrence = [ "recurring" Mode "every" Duration ( "until" DateTime | "for" Duration ) ] .
 
-  Recurrence =
-    [
-      "recurring" [ RecurrenceMode ] "every" Duration
-      (
-          "until" DateTime
-        | "for"   Duration
-      )
-    ]
-  .
-
-  RecurrenceMode =
-      "strict"
-    | "flexible"
-  .
+  Mode = "strict" | "flexible" .
 
 END ResourceAvailability.
