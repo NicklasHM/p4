@@ -26,16 +26,16 @@ IGNORE '\r' + '\n' + '\t' + ' '
 PRODUCTIONS
 
   ResourceAvailability =
-    { Statement ";" } EOF
+    { Statement } EOF
   .
 
   Statement =
-      Decl
+    (  Decl
     | Expr
     | ident "is" "a" ident
     | "cancel" ident
-    | "if" BoolExpr "then" Statement "else" Statement
-    | "if" BoolExpr "then" Statement
+    | "if" "(" BoolExpr ")" "then" {Statement} ["else" {Statement}]
+    ) ";"
   .
 
   Decl =
@@ -77,7 +77,7 @@ PRODUCTIONS
 
   TemplateDecl =
     "template" ident "(" [ ParamList ] ")" "{"
-      { Statement ";" }
+      { Statement }
     "}"
   .
 
