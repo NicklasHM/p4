@@ -3,7 +3,14 @@
 /* {} Curly brackets mean that the string is repeated zero or more times  */
 /* () is a grouping used alongside |. The parenthesis contains a series of strings separated by |. This means that exactly one of the strings is chosen. */
 
+
 COMPILER ResourceAvailability
+
+bool IsParenBool() {
+    scanner.ResetPeek();
+    Token t = scanner.Peek();
+    return t.kind == _not;
+}
 
 CHARACTERS
   letter     = 'A'..'Z' + 'a'..'z' .
@@ -22,6 +29,7 @@ TOKENS
   timeLit   = digit digit colon digit digit .
 
 IGNORE '\r' + '\n' + '\t' + ' '
+
 
 PRODUCTIONS
 
@@ -132,7 +140,7 @@ PRODUCTIONS
 
   BoolFactor =
       "not" BoolFactor
-    | "(" BoolExpr ")"
+    | IF(IsParenBool()) "(" BoolExpr ")"
     | Comparison
   .
 
@@ -224,6 +232,6 @@ PRODUCTIONS
   RecurrenceMode =
       "strict"
     | "flexible"
-  .
+  . 
 
 END ResourceAvailability.
