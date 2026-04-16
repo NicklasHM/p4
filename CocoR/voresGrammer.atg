@@ -66,13 +66,13 @@ PRODUCTIONS
   .
 
   ResourceDecl =
-    ident ident "{"
+    ident ident ["{"
       { VarDecl ";" }
-    "}"
+    "}"]
   .
 
   CategoryDecl =
-    "category" ident [ "is" "a" ident ]
+    "category" ident [ "is a" ident ]
   .
 
   TemplateDecl =
