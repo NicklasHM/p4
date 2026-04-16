@@ -188,7 +188,12 @@ PRODUCTIONS
 
   DateTime = ( dateLit timeLit | ident ) { ("+" | "-") Duration } .
 
-  U = "w" | "d" | "h" | "m" .
+  U = W | D | H | M .
+
+  W = "w" | "week" | "weeks" .
+  D = "d" | "day" | "days" .
+  H = "h" | "hour" | "hours" .
+  M = "m" | "minute" | "minutes" .
 
   Duration = ( U | ident | ArithExpr U ) { ( U | ident | ArithExpr U ) } .
 
