@@ -26,13 +26,7 @@ public class Parser {
 bool IsParenBool() {
     scanner.ResetPeek();
     Token t = scanner.Peek();
-    return t.kind == _not;
-}
-
-bool isIndentBool(){
-  scanner.ResetPeek();
-  token t = scanner.peek();
-  return t.kind == _assign;
+    return t.kind == _lparen;;
 }
 
 
