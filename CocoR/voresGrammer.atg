@@ -148,36 +148,41 @@ PRODUCTIONS
     )
   .
 
-  ResourceExpr =
-      ident
-    | ArithExpr "*" ident
-    | ResourceExpr "and" ResourceExpr
+  ResourceExpr =                     /*x?*/
+    (
+      ident                          /*  r:          a declared resource*/
+      | ArithExpr ident ident        /*  a*rc id:    a quantity of a category with local variable binding for constraints  */
+    )
+    { "and" ResourceExpr }           /* Re and Re:   composite without left recursion */
   .
 
-  AvailabilityExpr =
+  QueryExpr =
     ResourceExpr TimeExpr Constraint Recurrence
   .
 
-  ReservationExpr =
-    ReservationTerm
-    {
-        "and" ReservationTerm
-      | "or"  ReservationTerm
-      | ","   ReservationTerm
-    }
+  AvailabilityExpr =
+    "check" QueryExpr
   .
 
-  ReservationTerm =
-      "reserve" AvailabilityExpr
+  ReservationExpr =                 /*  rsrvE  with operator precedence low -> high:  choice(or) - both(and) - best effort(,) - atom(reserve) | parenthesis() */
+    ReservationConjExpr { "or" ReservationConjExpr } 
+  .
+
+   ReservationConjExpr =
+      ReservationSeqExpr { "and" ReservationSeqExpr}
+  .
+
+   ReservationSeqExpr =
+      ReservationAtomExpr { "," ReservationAtomExpr}
+  .
+
+  ReservationAtomExpr =
+      "reserve" QueryExpr
     | "(" ReservationExpr ")"
   .
 
   Constraint =
-    [ "where" "(" IdentList ")" BoolExpr ]
-  .
-
-  IdentList =
-    ident { ident }
+    [ "where" BoolExpr ]
   .
 
   TimeExpr =
