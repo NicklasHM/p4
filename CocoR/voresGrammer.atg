@@ -46,8 +46,7 @@ PRODUCTIONS
   .
 
   VarDecl =
-      Type ident
-    | Type ident ":=" Expr
+    Type ident [ ":=" Expr ]
   .
 
   Type =
@@ -67,13 +66,13 @@ PRODUCTIONS
   .
 
   ResourceDecl =
-    ident ident "{"
+    ident ident ["{"
       { VarDecl ";" }
-    "}"
+    "}"]
   .
 
   CategoryDecl =
-    "category" ident [ "is" "a" ident ]
+    "category" ident [ "is a" ident ]
   .
 
   TemplateDecl =
