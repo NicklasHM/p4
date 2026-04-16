@@ -5,11 +5,14 @@ Developed as a semester project at Aalborg University, SW4 Group 2, 2026.
 
 
 ## Project Structure
+
+```
 p4/
 ├── CocoR/          # Coco/R grammar and generated parser
 │   ├── voresGrammer.atg
 │   └── Coco.exe
 └── README.md
+```
 
 ## Prerequisites
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
