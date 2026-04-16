@@ -165,15 +165,15 @@ PRODUCTIONS
   .
 
   ReservationExpr =                 /*  rsrvE  with operator precedence low -> high:  choice(or) - both(and) - best effort(,) - atom(reserve) | parenthesis() */
-    ReservationConjExpr { "or" ReservationExpr } 
+    ReservationConjExpr { "or" ReservationConjExpr } 
   .
 
    ReservationConjExpr =
-      ReservationSeqExpr { "and" ReservationConjExpr}
+      ReservationSeqExpr { "and" ReservationSeqExpr}
   .
 
    ReservationSeqExpr =
-      ReservationAtomExpr { "," ReservationSeqExpr}
+      ReservationAtomExpr { "," ReservationAtomExpr}
   .
 
   ReservationAtomExpr =
