@@ -149,7 +149,7 @@ PRODUCTIONS
   .
 
   ResourceExpr =
-      ArithExpr ResourceExpr /*x, r (a declared resource), a*rc id (a quantity of a category with local variable binding for constraints)*/
+      ArithExpr Expr /*x, r (a declared resource), a*rc id (a quantity of a category with local variable binding for constraints)*/
     { "and" ResourceExpr }   /* Re and Re:   composite without left recursion */
   .
 
