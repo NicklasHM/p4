@@ -1,0 +1,14 @@
+category Room;
+category DoubleRoom is a Room;
+category SingleRoom is a Room;
+category Suite is a Room;
+
+DoubleRoom room1 {};
+SingleRoom room2 {};
+Suite room3 {};
+
+reserve room1 from 15/03-2026 14:00 to 17/03-2026 12:00
+or
+reserve room2 from 15/03-2026 14:00 to 17/03-2026 12:00
+,
+reserve room3 from 15/03-2026 14:00 to 17/03-2026 12:00;

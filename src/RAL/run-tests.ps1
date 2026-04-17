@@ -2,6 +2,7 @@
 # Usage: ./run-tests.ps1 <folder>
 # Example: ./run-tests.ps1 parser/valid/precedence
 
+
 param(
     [Parameter(Mandatory=$true)]
     [string]$folder

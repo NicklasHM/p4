@@ -1,0 +1,7 @@
+category Room;
+category DoubleRoom is a Room;
+
+DoubleRoom room1 { bool seaView; };
+DoubleRoom room2 { bool seaView; };
+
+check DoubleRoom from 15/03-2026 14:00 to 17/03-2026 12:00 where seaView == true and seaView == true or seaView == false;
