@@ -8,10 +8,18 @@ Developed as a semester project at Aalborg University, SW4 Group 2, 2026.
 
 ```
 p4/
-├── CocoR/          # Coco/R grammar and generated parser
-│   ├── voresGrammer.atg
-│   └── Coco.exe
-└── README.md
+├── CocoR/               # Coco/R grammar and generation script
+├── src/
+│   └── RAL/             # C# project
+│       ├──  Generated/  # Auto-generated scanner and parser (do not edit)
+│       ├──  AST
+│       └──  Interpreter
+├── tests/
+│   ├── parser/
+│   ├── typechecker/
+│   ├── semantics/
+│   └── integration/
+
 ```
 
 ## Prerequisites
@@ -30,20 +38,20 @@ cd p4
 
 ### Regenerating the Parser
 
-If the grammar has been updated, regenerate the scanner and parser:
+Run the generation script whenever the grammar has been updated:
 
 ```bash
 cd CocoR
-./Coco.exe voresGrammer.atg
-copy Scanner.cs ../ResourceDSL/
-copy Parser.cs ../ResourceDSL/
+./generate.ps1
 ```
+
+This generates `Scanner.cs` and `Parser.cs` directly into `src/RAL/Generated/`.
 
 ### Running a RAL Program
 
 ```bash
-cd ResourceDSL
-dotnet run -- yourfile.ra
+cd src/RAL
+dotnet run -- ../../tests/parser/valid/yourfile.ra
 ```
 
 ## Example
@@ -54,6 +62,7 @@ DoubleRoom room205 {
   bool seaView;
   int floor;
 };
+
 check room205 from 15/03-2026 14:00 to 17/03-2026 12:00;
 ```
 
