@@ -153,9 +153,9 @@ PRODUCTIONS
     ResourceExp TimeExp [ "where" Exp] [Recurrence] 
   .
 
-   ResourceExp =    /*P2 How to get IDENT*/
-    Exp Type Exp    /*x,    r,   a*rc id  (a quantity of a category with local variable binding for constraints)*/
-    { "and" Exp}   /* Re and Re:   composite without left recursion */
+   ResourceExp =           /* x, r, a*rc id (a quantity of a category with local variable binding for constraints)*/
+    [AdditiveExp ident] ident
+    { "and" ResourceExp}   /* Re and Re:   composite without left recursion */
   .
 
 /*________________TIME__________________________________________*/
