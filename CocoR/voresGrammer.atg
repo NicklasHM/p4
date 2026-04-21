@@ -108,8 +108,8 @@ PRODUCTIONS
     AdditiveExp { ("<" | ">" | "<=" | ">=" ) AdditiveExp }
   .
 
-  AdditiveExp =                                            /*Only relevant for durations*/
-    MultiplicativeExp { ( "+" | "-" )  MultiplicativeExp } [Unit]
+  AdditiveExp =
+    MultiplicativeExp { ( "+" | "-" )  MultiplicativeExp }
   .
 
   MultiplicativeExp =
@@ -159,9 +159,11 @@ PRODUCTIONS
   .
 
 /*________________TIME__________________________________________*/
-  TimeExp= "from" DateTime ("to" DateTime | "for" Exp) .
+  TimeExp= "from" DateTime ("to" DateTime | "for" Duration) .
 
-  DateTime = dateLit timeLit  { ("+" | "-") Exp } . /*P3 ident /variables*/
+  DateTime = dateLit timeLit  [ ("+" | "-") Duration ] .
+
+  Duration = AdditiveExp Unit { AdditiveExp Unit } .
 
   Unit = 
       "w" | "week" | "weeks" 
@@ -170,6 +172,6 @@ PRODUCTIONS
     | "m" | "minute" | "minutes" 
   .
 
-  Recurrence = "recurring" ( "strict" | "flexible" ) "every" Exp ( "until" DateTime | "for" Exp ) .
+  Recurrence = "recurring" ( "strict" | "flexible" ) "every" Duration ( "until" DateTime | "for" Duration ) .
 
 END ResourceAvailability.
