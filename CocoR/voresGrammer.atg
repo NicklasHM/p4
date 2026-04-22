@@ -133,7 +133,7 @@ PRODUCTIONS
   .
 
   /* Only relevant for reservation expressions used to make composite reservations.  Precedence low -> high:  
-    choice(or) - both(and) - best effort(,) - atom(reserve) | parenthesis() */
+    choice(or) - both(and) - best effort(seq) - atom(reserve) | parenthesis() */
   SequentialExp =
     EqualityExp { "seq"  EqualityExp }  
   .
