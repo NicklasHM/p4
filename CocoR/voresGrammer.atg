@@ -1,9 +1,45 @@
 /* The EBNF uses the following extensions: */
 /* [] zero or one times.  */
 /* {} zero or more times  */
-/* () grouping used alongside |. The parenthesis contains a series of strings separated by |. This means that exactly one of the strings is chosen. */
+/* () grouping used alongside |. Exactly one of the strings seperated by | is chosen. */
 
 COMPILER ResourceAvailability
+
+/* ___________________LL(1) Conflict Resolvers_____________________*/
+/* For ident in VarDecl and Primary Exp*/
+bool FollowedByIdent() {
+    Token next = scanner.Peek();
+    return la.kind == _ident && next.kind == _ident;
+}
+
+/* For number in Primary Exp and Duration */
+bool FollowedByUnit() {
+    Token next = scanner.Peek();
+    return la.kind == _number &&
+           next.val == "w" || next.val == "week" || next.val == "weeks" ||
+           next.val == "d" || next.val == "day"  || next.val == "days"  ||
+           next.val == "h" || next.val == "hour" || next.val == "hours" ||
+           next.val == "m" || next.val == "minute" || next.val == "minutes";
+}
+
+/* For number in alternatives of Duration */
+bool FollowedByWeek(){
+    scanner.ResetPeek();
+    Token next = scanner.Peek();
+    return next.val == "w" || next.val == "week" || next.val == "weeks";
+}
+
+bool FollowedByDay(){
+    scanner.ResetPeek();
+    Token next = scanner.Peek();
+    return next.val == "d" || next.val == "day"  || next.val == "days";
+}
+
+bool FollowedByHour(){
+    scanner.ResetPeek();
+    Token next = scanner.Peek();
+    return next.val == "h" || next.val == "hour" || next.val == "hours";
+}
 
 CHARACTERS
   letter     = 'A'..'Z' + 'a'..'z' .
@@ -34,7 +70,7 @@ PRODUCTIONS
 
   Statement =
     (  
-      Decl
+      IF(FollowedByIdent()) Decl
     | "move" ident "to" ident /*  move resource to category  */
     | "cancel" ident          /*  reservation */
     | "if" "(" Exp ")" "then" {Statement} ["else" {Statement}]
@@ -55,7 +91,9 @@ PRODUCTIONS
 
   Type =
       "Number" | "Bool" | "String"
-    | "Resource"
+    | "Resource"                  /* designates an element: a resource*/
+    | "Category"                  /* designates the class of categories*/
+    | ident                       /* user-defined categories */
     | "Reservation"
     | "TimePeriod"
     | "DateTime"
@@ -97,14 +135,14 @@ PRODUCTIONS
   /* Only relevant for reservation expressions used to make composite reservations.  Precedence low -> high:  
     choice(or) - both(and) - best effort(,) - atom(reserve) | parenthesis() */
   SequentialExp =
-    EqualityExp { ","  EqualityExp }  
+    EqualityExp { "seq"  EqualityExp }  
   .
 
   EqualityExp =
-    RelExp { ("==" | "!=") RelExp }
+    RelationalExp { ("==" | "!=") RelationalExp }
   .
 
-  RelExp =
+  RelationalExp =
     AdditiveExp { ("<" | ">" | "<=" | ">=" ) AdditiveExp }
   .
 
@@ -122,6 +160,7 @@ PRODUCTIONS
 
   Primary =           /* assignment| Only for resource declarations */
       ident['.'ident] [ ( ":=" Exp | "{" { VarDecl ";" } "}" ) ] 
+    | IF(FollowedByUnit()) Duration
     | number
     | stringLit
     | "true"
@@ -163,13 +202,12 @@ PRODUCTIONS
 
   DateTime = dateLit timeLit  [ ("+" | "-") Duration ] .
 
-  Duration = AdditiveExp Unit { AdditiveExp Unit } .
-
-  Unit = 
-      "w" | "week" | "weeks" 
-    | "d" | "day" | "days" 
-    | "h" | "hour" | "hours" 
-    | "m" | "minute" | "minutes" 
+  /*alternative that does not enforce unit structure/repetition = number Unit {number Unit} */
+  Duration = 
+      IF(FollowedByWeek()) number ("w" | "week" | "weeks") [number ("d" | "day" | "days" )] [number ("h" | "hour" | "hours" )] [number ("m" | "minute" | "minutes")]
+    | IF(FollowedByDay()) number ("d" | "day" | "days" ) [number ("h" | "hour" | "hours" )] [number ("m" | "minute" | "minutes")]
+    | IF(FollowedByHour()) number ("h" | "hour" | "hours" ) [number ("m" | "minute" | "minutes")]
+    | number ("m" | "minute" | "minutes")
   .
 
   Recurrence = "recurring" ( "strict" | "flexible" ) "every" Duration ( "until" DateTime | "for" Duration ) .
