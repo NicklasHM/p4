@@ -54,7 +54,7 @@ PRODUCTIONS
   .
 
   Type =
-      "number" | "bool" | "string"
+      "Number" | "Bool" | "String"
     | "Resource"
     | "Reservation"
     | "TimePeriod"
