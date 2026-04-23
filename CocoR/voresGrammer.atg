@@ -5,6 +5,10 @@
 
 COMPILER ResourceAvailability
 
+using RAL.AST;
+
+public List<Statement> Program = new List<Statement>();
+
 /* ___________________LL(1) Conflict Resolvers_____________________*/
 /* For ident in VarDecl and Primary Exp*/
 bool FollowedByIdent() {
