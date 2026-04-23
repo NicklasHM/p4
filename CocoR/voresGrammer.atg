@@ -7,7 +7,7 @@ COMPILER ResourceAvailability
 
 using RAL.AST;
 
-public List<Statement> Program = new List<Statement>();
+public List<Stmt> Program = new List<Stmt>();
 
 /* ___________________LL(1) Conflict Resolvers_____________________*/
 /* For ident in VarDecl and Primary Exp*/
@@ -69,15 +69,15 @@ IGNORE '\r' + '\n' + '\t' + ' '
 PRODUCTIONS
 
   ResourceAvailability =
-    { Statement } EOF
+    { Stmt } EOF
   .
 
-  Statement =
+  Stmt =
     (  
       IF(FollowedByIdent()) Decl
     | "move" ident "to" ident /*  move resource to category  */
     | "cancel" ident          /*  reservation */
-    | "if" "(" Exp ")" "then" "{" {Statement} "}" ["else" "{" {Statement} "}"]
+    | "if" "(" Exp ")" "then" "{" {Stmt} "}" ["else" "{" {Stmt} "}"]
     |  Exp
     ) ";"
   .
@@ -110,7 +110,7 @@ PRODUCTIONS
 
   TemplateDecl =
     "template" ident "(" [ ParamList ] ")" "{"
-      { Statement }
+      { Stmt }
     "}"
   .
 
