@@ -73,7 +73,7 @@ PRODUCTIONS
       IF(FollowedByIdent()) Decl
     | "move" ident "to" ident /*  move resource to category  */
     | "cancel" ident          /*  reservation */
-    | "if" "(" Exp ")" "then" {Statement} ["else" {Statement}]
+    | "if" "(" Exp ")" "then" "{" {Statement} "}" ["else" "{" {Statement} "}"]
     |  Exp
     ) ";"
   .
