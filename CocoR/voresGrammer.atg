@@ -1,9 +1,45 @@
 /* The EBNF uses the following extensions: */
-/* [] Brackets mean that the string is written zero or one times.  */
-/* {} Curly brackets mean that the string is repeated zero or more times  */
-/* () is a grouping used alongside |. The parenthesis contains a series of strings separated by |. This means that exactly one of the strings is chosen. */
+/* [] zero or one times.  */
+/* {} zero or more times  */
+/* () grouping used alongside |. Exactly one of the strings seperated by | is chosen. */
 
 COMPILER ResourceAvailability
+
+/* ___________________LL(1) Conflict Resolvers_____________________*/
+/* For ident in VarDecl and Primary Exp*/
+bool FollowedByIdent() {
+    Token next = scanner.Peek();
+    return la.kind == _ident && next.kind == _ident;
+}
+
+/* For number in Primary Exp and Duration */
+bool FollowedByUnit() {
+    Token next = scanner.Peek();
+    return la.kind == _number &&
+           next.val == "w" || next.val == "week" || next.val == "weeks" ||
+           next.val == "d" || next.val == "day"  || next.val == "days"  ||
+           next.val == "h" || next.val == "hour" || next.val == "hours" ||
+           next.val == "m" || next.val == "minute" || next.val == "minutes";
+}
+
+/* For number in alternatives of Duration */
+bool FollowedByWeek(){
+    scanner.ResetPeek();
+    Token next = scanner.Peek();
+    return next.val == "w" || next.val == "week" || next.val == "weeks";
+}
+
+bool FollowedByDay(){
+    scanner.ResetPeek();
+    Token next = scanner.Peek();
+    return next.val == "d" || next.val == "day"  || next.val == "days";
+}
+
+bool FollowedByHour(){
+    scanner.ResetPeek();
+    Token next = scanner.Peek();
+    return next.val == "h" || next.val == "hour" || next.val == "hours";
+}
 
 CHARACTERS
   letter     = 'A'..'Z' + 'a'..'z' .
@@ -15,11 +51,14 @@ CHARACTERS
   colon      = ':' .
 
 TOKENS
-  ident     = letter { letter | digit | underscore } .
-  number    = digit { digit } .
+  ident     = (letter | underscore) { letter | digit | underscore } .
+  number    = digit { digit } [ '.' digit { digit } ] .
   stringLit = '"' { letter | digit | space | underscore | dash } '"' .
   dateLit   = digit digit slash digit digit dash digit digit digit digit .
   timeLit   = digit digit colon digit digit .
+
+COMMENTS FROM "/*" TO "*/" NESTED  /* Nested means: "There can be comments inside comments" */
+COMMENTS FROM "//" TO '\n'
 
 IGNORE '\r' + '\n' + '\t' + ' '
 
@@ -30,45 +69,35 @@ PRODUCTIONS
   .
 
   Statement =
-    (  Decl
-    | Expr
-    | ident "is" "a" ident
-    | "cancel" ident
-    | "if" "(" BoolExpr ")" "then" {Statement} ["else" {Statement}]
+    (  
+      IF(FollowedByIdent()) Decl
+    | "move" ident "to" ident /*  move resource to category  */
+    | "cancel" ident          /*  reservation */
+    | "if" "(" Exp ")" "then" "{" {Statement} "}" ["else" "{" {Statement} "}"]
+    |  Exp
     ) ";"
   .
 
+ /*___________________________Declarations________________________*/
   Decl =
       VarDecl
-    | ResourceDecl
     | CategoryDecl
     | TemplateDecl
   .
 
-  VarDecl =
-    Type ident [ ":=" Expr ]
+  VarDecl =   /* +assignment| Only for resource declarations */
+    Type ident [ ( ":=" Exp | "{" { VarDecl ";" } "}" ) ]
   .
 
   Type =
-      BaseType
-    | "Resource"
+      "Number" | "Bool" | "String"
+    | "Resource"                  /* designates an element: a resource*/
+    | "Category"                  /* designates the class of categories*/
+    | ident                       /* user-defined categories */
     | "Reservation"
     | "TimePeriod"
     | "DateTime"
     | "Duration"
-  .
-
-  BaseType =
-      "int"
-    | "bool"
-    | "string"
-    | "float"
-  .
-
-  ResourceDecl =
-    ident ident ["{"
-      { VarDecl ";" }
-    "}"]
   .
 
   CategoryDecl =
@@ -89,116 +118,98 @@ PRODUCTIONS
     Type ident
   .
 
-  Expr =
-      ident ":=" Expr
-    | ArithExpr
-    | BoolExpr
-    | TimeExpr
+  /*_______________Expessions: low to high precedence ____________*/
+
+  Exp = 
+    LogicalOrExp 
+  .
+
+  LogicalOrExp = 
+    LogicalAndExp { "or" LogicalAndExp }
+  .
+
+  LogicalAndExp = 
+    SequentialExp { "and" SequentialExp } 
+  .
+
+  /* Only relevant for reservation expressions used to make composite reservations.  Precedence low -> high:  
+    choice(or) - both(and) - best effort(seq) - atom(reserve) | parenthesis() */
+  SequentialExp =
+    EqualityExp { "seq"  EqualityExp }  
+  .
+
+  EqualityExp =
+    RelationalExp { ("==" | "!=") RelationalExp }
+  .
+
+  RelationalExp =
+    AdditiveExp { ("<" | ">" | "<=" | ">=" ) AdditiveExp }
+  .
+
+  AdditiveExp =
+    MultiplicativeExp { ( "+" | "-" )  MultiplicativeExp }
+  .
+
+  MultiplicativeExp =
+    UnaryExp { ( "*" | "/" ) UnaryExp }
+  .
+
+  UnaryExp = /*    "not" UnaryExp     boolean negation, right-recursive * | "-"   UnaryExp   arithmetic negation, right-recursive | Primary*/
+    [ "not" ] Primary /*Unary negation relevant for boolean expressions.*/ 
+  .
+
+  Primary =           /* assignment| Only for resource declarations */
+      ident['.'ident] [ ( ":=" Exp | "{" { VarDecl ";" } "}" ) ] 
+    | IF(FollowedByUnit()) Duration
+    | number
+    | stringLit
+    | "true"
+    | "false"
+    | "(" Exp ")"
+    | TimeExp
     | DateTime
-    | Duration
-    | ResourceExpr
-    | AvailabilityExpr
-    | ReservationExpr
-    | "reschedule" ident TimeExpr
-    | "use" ident "(" [ ArgumentList ] ")"
+    | AvailabilityExp
+    | ReservationAtomExp
+    | "reschedule" ident TimeExp          /* For reservations */
+    | "use" ident "(" [ ArgumentList ] ")"/* Template invocation */
   .
 
   ArgumentList =
-    Expr { "," Expr }
+    Exp{ "," Exp}
   .
 
-  ArithExpr =
-    ArithTerm { ( "+" | "-" ) ArithTerm }
+/*________________________ Domain Expessions ____________________*/
+
+  AvailabilityExp =
+    "check" QueryExp
   .
 
-  ArithTerm =
-    ArithFactor { ( "*" | "/" ) ArithFactor }
+  ReservationAtomExp=
+    "reserve" QueryExp
   .
 
-  ArithFactor =
-      ident
-    | number
-    | "(" ArithExpr ")"
+  QueryExp=
+    ResourceExp TimeExp [ "where" Exp] [Recurrence] 
   .
 
-  BoolExpr =
-    BoolTerm { "or" BoolTerm }
+   ResourceExp =           /* x, r, a*rc id (a quantity of a category with local variable binding for constraints)*/
+    [AdditiveExp ident] ident
+    { "and" ResourceExp}   /* Re and Re:   composite without left recursion */
   .
 
-  BoolTerm =
-    BoolFactor { "and" BoolFactor }
+/*________________TIME__________________________________________*/
+  TimeExp= "from" DateTime ("to" DateTime | "for" Duration) .
+
+  DateTime = dateLit timeLit  [ ("+" | "-") Duration ] .
+
+  /*alternative that does not enforce unit structure/repetition = number Unit {number Unit} */
+  Duration = 
+      IF(FollowedByWeek()) number ("w" | "week" | "weeks") [number ("d" | "day" | "days" )] [number ("h" | "hour" | "hours" )] [number ("m" | "minute" | "minutes")]
+    | IF(FollowedByDay()) number ("d" | "day" | "days" ) [number ("h" | "hour" | "hours" )] [number ("m" | "minute" | "minutes")]
+    | IF(FollowedByHour()) number ("h" | "hour" | "hours" ) [number ("m" | "minute" | "minutes")]
+    | number ("m" | "minute" | "minutes")
   .
 
-  BoolFactor =
-      "not" BoolFactor
-    | "(" BoolExpr ")"
-    | Comparison
-  .
-
-  Comparison =
-    ArithExpr
-    (
-        "==" ArithExpr
-      | "!=" ArithExpr
-      | "<"  ArithExpr
-      | "<=" ArithExpr
-      | ">"  ArithExpr
-      | ">=" ArithExpr
-    )
-  .
-
-  ResourceExpr =                     /*x?*/
-    (
-      ident                          /*  r:          a declared resource*/
-      | ArithExpr ident ident        /*  a*rc id:    a quantity of a category with local variable binding for constraints  */
-    )
-    { "and" ResourceExpr }           /* Re and Re:   composite without left recursion */
-  .
-
-  QueryExpr =
-    ResourceExpr TimeExpr Constraint Recurrence
-  .
-
-  AvailabilityExpr =
-    "check" QueryExpr
-  .
-
-  ReservationExpr =                 /*  rsrvE  with operator precedence low -> high:  choice(or) - both(and) - best effort(,) - atom(reserve) | parenthesis() */
-    ReservationConjExpr { "or" ReservationConjExpr } 
-  .
-
-   ReservationConjExpr =
-      ReservationSeqExpr { "and" ReservationSeqExpr}
-  .
-
-   ReservationSeqExpr =
-      ReservationAtomExpr { "," ReservationAtomExpr}
-  .
-
-  ReservationAtomExpr =
-      "reserve" QueryExpr
-    | "(" ReservationExpr ")"
-  .
-
-  Constraint =
-    [ "where" BoolExpr ]
-  .
-
-  TimeExpr = "from" DateTime ("to" DateTime | "for" Duration) .
-
-  DateTime = ( dateLit timeLit | ident ) { ("+" | "-") Duration } .
-
-  U = W | D | H | M .
-
-  W = "w" | "week" | "weeks" .
-  D = "d" | "day" | "days" .
-  H = "h" | "hour" | "hours" .
-  M = "m" | "minute" | "minutes" .
-
-  Duration = ( U | ident | ArithExpr U ) { ( U | ident | ArithExpr U ) } .
-
-  Recurrence = [ "recurring" Mode "every" Duration ( "until" DateTime | "for" Duration ) ] .
-
-  Mode = "strict" | "flexible" .
+  Recurrence = "recurring" ( "strict" | "flexible" ) "every" Duration ( "until" DateTime | "for" Duration ) .
 
 END ResourceAvailability.
