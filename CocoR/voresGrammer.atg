@@ -152,40 +152,40 @@ PRODUCTIONS
     }  
   .
 
-  EqualityExp <out Exp exp>=
+  EqualityExp <out Exp exp>=         (. BinaryOperator op = null;.)
     RelationalExp <out exp>
-    { ("==" 
-      | "!="
-      ) RelationalExp <out Exp exp2>
+    { ("=="                          (. op = BinaryOperator.EQ;.)
+      | "!="                         (. op = BinaryOperator.NEQ;.)
+      ) RelationalExp <out Exp exp2> (. exp = new BinaryOp(exp, op, exp2);.)
     }
   .
 
-  RelationalExp <out Exp exp> =
-    AdditiveExp <out exp>
-    { ("<" 
-      | ">" 
-      | "<=" 
-      | ">=" 
+  RelationalExp <out Exp exp> =     (. BinaryOperator op = null;.)
+    AdditiveExp <out exp>           
+    { ("<"                          (. op = BinaryOperator.LT;.)
+      | ">"                         (. op = BinaryOperator.GT;.)
+      | "<="                        (. op = BinaryOperator.LTEQ;.)
+      | ">="                        (. op = BinaryOperator.GTEQ;.)
       ) 
-      AdditiveExp <out Exp exp2>
+      AdditiveExp <out Exp exp2>    (. exp = new BinaryOp(exp, op, exp2);.)
     }
   .
 
-  AdditiveExp <out Exp exp> =
+  AdditiveExp <out Exp exp> =          (. BinaryOperator op = null;.)
     MultiplicativeExp <out exp>
-    { ( "+" 
-      | "-" 
+    { ( "+"                            (. op = BinaryOperator.ADD;.)
+      | "-"                            (. op = BinaryOperator.SUB;.)
       )  
-      MultiplicativeExp <out Exp exp2>
+      MultiplicativeExp <out Exp exp2> (. exp = new BinaryOp(exp, op, exp2);.)
     }
   .
 
-  MultiplicativeExp <out Exp exp> =
+  MultiplicativeExp <out Exp exp> = (. BinaryOperator op = null;.)
     UnaryExp <out exp>
-    { ( "*" 
-      | "/" 
+    { ( "*"                         (. op = BinaryOperator.MUL;.)
+      | "/"                         (. op = BinaryOperator.DIV;.)
       ) 
-      UnaryExp <out Exp exp2>
+      UnaryExp <out Exp exp2>       (. exp = new BinaryOp(exp, op, exp2);.)
     }
   .
 
