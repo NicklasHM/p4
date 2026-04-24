@@ -1,9 +1,19 @@
-namespace RAL;
+namespace RAL.AST;
+/*
+Record class declaration: https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/types/records#declare-a-record
+Primary constructors: https://learn.microsoft.com/en-us/dotnet/csharp/whats-new/tutorials/primary-constructors 
+*/
+
 abstract record class Stmt
 {
      int LineNumber { get; }
 }
 
+
+/* Positional parameters define both constructor and properties in a single line.
+* Establishes a reference type
+* Properties are init-only (immutable after construction).
+*/
 record class VarDecl(Type Type, string Identifier, Exp? Expression) : Stmt;
 
 record class CategoryDecl (string CategoryId, string? ParentId) : Stmt;

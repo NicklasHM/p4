@@ -1,15 +1,15 @@
-namespace RAL;
-abstract class Exp
+namespace RAL.AST;
+
+abstract record class Exp
 {
     int lineNumber { get; }
 }
 
-class BinaryOp : Exp
-{
-    
-}
+record class BinaryOp(Exp LeftExpression, BinaryOperator Operator, Exp? RightExpression ) : Exp;
 
-enum BinaryOperators 
+record class UnaryOp(UnaryOperator? Operator, Exp Expression ): Exp;
+
+enum BinaryOperator
 {
     OR, AND, SEQ,
     EQ, NEQ,
@@ -18,7 +18,7 @@ enum BinaryOperators
     MUL, DIV
 }
 
-enum UnaryOperators 
+enum UnaryOperator
 {
     NOT//, NEG
 }
