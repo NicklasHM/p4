@@ -5,24 +5,24 @@ namespace RAL.AST;
 /* Primary constructor syntax with positional parameters define constructor and properties in a single line.
 *  Properties are init-only (immutable after construction).
 */
-abstract record class Stmt(int LineNumber );
+abstract record class Stmt(int LineNumber);
 
 /* Derived records declare positional parameters for all parameters in base record primary constructor. 
    Base record declares and initializes those properties. 
    The derived record doesn't hide them, but only creates and initializes properties for parameters that aren't declared in its base record.
 */
-record class VarDecl(int LineNumber, Type Type, string Identifier, Exp? Expression) : Stmt;
+record class VarDecl(int LineNumber, Type Type, string Identifier, Exp? Expression) : Stmt(LineNumber);
 
-record class CategoryDecl (int LineNumber, string CategoryId, string? ParentId) : Stmt;
+record class CategoryDecl (int LineNumber, string CategoryId, string? ParentId) : Stmt(LineNumber);
 
-record class TempDecl(int LineNumber, string TemplateId, string paramList, List<Stmt> tempBody) : Stmt;
+record class TempDecl(int LineNumber, string TemplateId, string paramList, List<Stmt> tempBody) : Stmt(LineNumber);
 
-record class Param(int LineNumber, Type Type, string Identifier) : Stmt;
+record class Param(int LineNumber, Type Type, string Identifier) : Stmt(LineNumber);
 
-record class MoveTo(int LineNumber, string ResourceId, string CategoryId ) : Stmt;
+record class MoveTo(int LineNumber, string ResourceId, string CategoryId ) : Stmt(LineNumber);
 
-record class Cancel(int LineNumber, string ReservationId) : Stmt;
+record class Cancel(int LineNumber, string ReservationId) : Stmt(LineNumber);
 
-record class If(int LineNumber, Exp Condition, List<Stmt> ThenBody, List<Stmt> ElseBody) : Stmt;
+record class If(int LineNumber, Exp Condition, List<Stmt> ThenBody, List<Stmt> ElseBody) : Stmt(LineNumber);
 
-record class ExpStmt(int LineNumber, Exp Expression) : Stmt;
+record class ExpStmt(int LineNumber, Exp Expression) : Stmt(LineNumber);
