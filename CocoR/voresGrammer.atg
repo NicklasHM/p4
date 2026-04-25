@@ -2,8 +2,10 @@
 /* [] zero or one times.  */
 /* {} zero or more times  */
 /* () grouping used alongside |. Exactly one of the strings seperated by | is chosen. */
-
+using RAL.AST;
 COMPILER ResourceAvailability
+
+public List<Stmt> Program = new List<Stmt>();
 
 /* ___________________LL(1) Conflict Resolvers_____________________*/
 /* For ident in VarDecl and Primary Exp*/
@@ -62,19 +64,22 @@ COMMENTS FROM "//" TO '\n'
 
 IGNORE '\r' + '\n' + '\t' + ' '
 
+/* out keyword
+https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/out
+*/
 PRODUCTIONS
 
   ResourceAvailability =
-    { Statement } EOF
+    { Stmt } EOF
   .
 
-  Statement =
+  Stmt =
     (  
       IF(FollowedByIdent()) Decl
     | "move" ident "to" ident /*  move resource to category  */
     | "cancel" ident          /*  reservation */
-    | "if" "(" Exp ")" "then" "{" {Statement} "}" ["else" "{" {Statement} "}"]
-    |  Exp
+    | "if" "(" Exp <out Exp cond> ")" "then" "{" {Stmt} "}" ["else" "{" {Stmt} "}"]
+    |  Exp <out Exp exp>
     ) ";"
   .
 
@@ -86,7 +91,7 @@ PRODUCTIONS
   .
 
   VarDecl =   /* +assignment| Only for resource declarations */
-    Type ident [ ( ":=" Exp | "{" { VarDecl ";" } "}" ) ]
+    Type ident [ ( ":=" Exp <out Exp exp>| "{" { VarDecl ";" } "}" ) ]
   .
 
   Type =
@@ -106,7 +111,7 @@ PRODUCTIONS
 
   TemplateDecl =
     "template" ident "(" [ ParamList ] ")" "{"
-      { Statement }
+      { Stmt }
     "}"
   .
 
@@ -120,52 +125,82 @@ PRODUCTIONS
 
   /*_______________Expessions: low to high precedence ____________*/
 
-  Exp = 
-    LogicalOrExp 
+  Exp <out Exp exp> = 
+    LogicalOrExp <out Exp exp>
   .
 
-  LogicalOrExp = 
-    LogicalAndExp { "or" LogicalAndExp }
+  LogicalOrExp <out Exp exp> = 
+    LogicalAndExp <out exp >
+    { "or"                        
+    LogicalAndExp <out Exp exp2>  (. exp = new BinaryOp(exp, BinaryOperator.OR, exp2); .)
+    }
   .
 
-  LogicalAndExp = 
-    SequentialExp { "and" SequentialExp } 
+  LogicalAndExp <out Exp exp> = 
+    SequentialExp <out exp>
+    { "and" 
+      SequentialExp <out Exp exp2> (. exp = new BinaryOp(exp, BinaryOperator.AND, exp2); .)
+    } 
   .
 
   /* Only relevant for reservation expressions used to make composite reservations.  Precedence low -> high:  
     choice(or) - both(and) - best effort(seq) - atom(reserve) | parenthesis() */
-  SequentialExp =
-    EqualityExp { "seq"  EqualityExp }  
+  SequentialExp <out Exp exp> =
+    EqualityExp <out exp>
+    { "seq"  
+      EqualityExp <out Exp exp2> (. exp = new BinaryOp(exp, BinaryOperator.SEQ, exp2); .)
+    }  
   .
 
-  EqualityExp =
-    RelationalExp { ("==" | "!=") RelationalExp }
+  EqualityExp <out Exp exp>=         (. BinaryOperator op = null;.)
+    RelationalExp <out exp>
+    { ("=="                          (. op = BinaryOperator.EQ;.)
+      | "!="                         (. op = BinaryOperator.NEQ;.)
+      ) RelationalExp <out Exp exp2> (. exp = new BinaryOp(exp, op, exp2);.)
+    }
   .
 
-  RelationalExp =
-    AdditiveExp { ("<" | ">" | "<=" | ">=" ) AdditiveExp }
+  RelationalExp <out Exp exp> =     (. BinaryOperator op = null;.)
+    AdditiveExp <out exp>           
+    { ("<"                          (. op = BinaryOperator.LT;.)
+      | ">"                         (. op = BinaryOperator.GT;.)
+      | "<="                        (. op = BinaryOperator.LTEQ;.)
+      | ">="                        (. op = BinaryOperator.GTEQ;.)
+      ) 
+      AdditiveExp <out Exp exp2>    (. exp = new BinaryOp(exp, op, exp2);.)
+    }
   .
 
-  AdditiveExp =
-    MultiplicativeExp { ( "+" | "-" )  MultiplicativeExp }
+  AdditiveExp <out Exp exp> =          (. BinaryOperator op = null;.)
+    MultiplicativeExp <out exp>
+    { ( "+"                            (. op = BinaryOperator.ADD;.)
+      | "-"                            (. op = BinaryOperator.SUB;.)
+      )  
+      MultiplicativeExp <out Exp exp2> (. exp = new BinaryOp(exp, op, exp2);.)
+    }
   .
 
-  MultiplicativeExp =
-    UnaryExp { ( "*" | "/" ) UnaryExp }
+  MultiplicativeExp <out Exp exp> = (. BinaryOperator op = null;.)
+    UnaryExp <out exp>
+    { ( "*"                         (. op = BinaryOperator.MUL;.)
+      | "/"                         (. op = BinaryOperator.DIV;.)
+      ) 
+      UnaryExp <out Exp exp2>       (. exp = new BinaryOp(exp, op, exp2);.)
+    }
   .
 
-  UnaryExp = /*    "not" UnaryExp     boolean negation, right-recursive * | "-"   UnaryExp   arithmetic negation, right-recursive | Primary*/
-    [ "not" ] Primary /*Unary negation relevant for boolean expressions.*/ 
+  UnaryExp <out Exp exp> = /*    "not" UnaryExp     boolean negation, right-recursive * | "-"   UnaryExp   arithmetic negation, right-recursive | Primary*/
+    [ "not" ] Primary <out exp> /*Unary negation relevant for boolean expressions.*/ 
   .
 
-  Primary =           /* assignment| Only for resource declarations */
-      ident['.'ident] [ ( ":=" Exp | "{" { VarDecl ";" } "}" ) ] 
+  Primary <out Exp exp> =           /* assignment| Only for resource declarations */
+      ident['.'ident] [ ( ":=" Exp<out exp> | "{" { VarDecl ";" } "}" ) ] 
     | IF(FollowedByUnit()) Duration
     | number
     | stringLit
     | "true"
     | "false"
-    | "(" Exp ")"
+    | "(" Exp<out exp> ")"
     | TimeExp
     | DateTime
     | AvailabilityExp
@@ -175,7 +210,10 @@ PRODUCTIONS
   .
 
   ArgumentList =
-    Exp{ "," Exp}
+    Exp<out Exp exp>
+    { "," 
+    Exp<out Exp exp2>
+    }
   .
 
 /*________________________ Domain Expessions ____________________*/
@@ -189,11 +227,11 @@ PRODUCTIONS
   .
 
   QueryExp=
-    ResourceExp TimeExp [ "where" Exp] [Recurrence] 
+    ResourceExp TimeExp [ "where" Exp<out Exp exp>] [Recurrence] 
   .
 
    ResourceExp =           /* x, r, a*rc id (a quantity of a category with local variable binding for constraints)*/
-    [AdditiveExp ident] ident
+    [AdditiveExp<out Exp exp> ident] ident
     { "and" ResourceExp}   /* Re and Re:   composite without left recursion */
   .
 
