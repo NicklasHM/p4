@@ -70,28 +70,28 @@ https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/out
 PRODUCTIONS
 
   ResourceAvailability =
-    { Stmt } EOF
+    { Stmt<out Stmt stmt> } EOF
   .
 
-  Stmt =
+  Stmt<out Stmt stmt> =
     (  
-      IF(FollowedByIdent()) Decl
+      IF(FollowedByIdent()) Decl<out stmt>
     | "move" ident "to" ident /*  move resource to category  */
     | "cancel" ident          /*  reservation */
-    | "if" "(" Exp <out Exp cond> ")" "then" "{" {Stmt} "}" ["else" "{" {Stmt} "}"]
+    | "if" "(" Exp <out Exp cond> ")" "then" "{" {Stmt<out Stmt stmt>} "}" ["else" "{" {Stmt<out Stmt stmt>} "}"]
     |  Exp <out Exp exp>
     ) ";"
   .
 
  /*___________________________Declarations________________________*/
-  Decl =
-      VarDecl
-    | CategoryDecl
-    | TemplateDecl
+  Decl<out Stmt stmt> =
+      VarDecl<out stmt>
+    | CategoryDecl<out stmt>
+    | TemplateDecl<out stmt>
   .
 
-  VarDecl =   /* +assignment| Only for resource declarations */
-    Type ident [ ( ":=" Exp <out Exp exp>| "{" { VarDecl ";" } "}" ) ]
+  VarDecl<out Stmt stmt> =   /* +assignment| Only for resource declarations */
+    Type ident [ ( ":=" Exp <out Exp exp>| "{" { VarDecl<out Stmt stmt> ";" } "}" ) ]
   .
 
   Type =
@@ -105,13 +105,13 @@ PRODUCTIONS
     | "Duration"
   .
 
-  CategoryDecl =
+  CategoryDecl<out Stmt stmt> =
     "category" ident [ "is" "a" ident ]
   .
 
-  TemplateDecl =
+  TemplateDecl<out Stmt stmt> =
     "template" ident "(" [ ParamList ] ")" "{"
-      { Stmt }
+      { Stmt<out Stmt stmt> }
     "}"
   .
 
@@ -194,7 +194,7 @@ PRODUCTIONS
   .
 
   Primary <out Exp exp> =           /* assignment| Only for resource declarations */
-      ident['.'ident] [ ( ":=" Exp<out exp> | "{" { VarDecl ";" } "}" ) ] 
+      ident['.'ident] [ ( ":=" Exp<out exp> | "{" { VarDecl<out Stmt stmt> ";" } "}" ) ] 
     | IF(FollowedByUnit()) Duration
     | number
     | stringLit
