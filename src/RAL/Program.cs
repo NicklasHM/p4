@@ -4,6 +4,12 @@ class Program {
     static void Main(string[] args) {
         if (args.Length == 0) {
             Console.WriteLine("Usage: dotnet run -- <inputfile>");
+            Console.WriteLine("       dotnet run -- --run-tests");
+            return;
+        }
+
+        if (args[0] == "--run-tests") {
+            EnvTest.Run();
             return;
         }
 
