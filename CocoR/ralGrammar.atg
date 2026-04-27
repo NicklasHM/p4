@@ -23,6 +23,7 @@ Stmt toComposite(List<Stmt> stmts) {
 
   // Start with the last statement as the initial result (the deepest node)
   Stmt result = stmts[stmts.Count - 1];
+  // Second last statement (lists are 0 indexed)
   int index = stmts.Count - 2;
 
   // Walk backwards and nest each statement to the left of the accumulated result.
