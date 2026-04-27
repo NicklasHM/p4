@@ -8,6 +8,6 @@ if (-not (Test-Path $outputDir)) {
     New-Item -ItemType Directory -Path $outputDir
 }
 
-./Coco.exe voresGrammer.atg -o $outputDir
+./Coco.exe ralGrammar.cs.atg -o $outputDir
 
 Write-Host "Generated Scanner.cs and Parser.cs in $outputDir"
