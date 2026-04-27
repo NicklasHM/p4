@@ -125,14 +125,16 @@ PRODUCTIONS
   .
 
   Type <out Type type> =
-      "Number" | "Bool" | "String"
-    | "Resource"                  /* designates an element: a resource*/
-    | "Category"                  /* designates the class of categories*/
-    | ident                       /* user-defined categories */
-    | "Reservation"
-    | "TimePeriod"
-    | "DateTime"
-    | "Duration"
+      "Number"      (. .)
+    | "Bool"        (. .)
+    | "String"      (. .)
+    | "Resource"    (. .)         /* designates an element: a resource*/
+    | "Category"    (. .)         /* designates the class of categories*/
+    | ident         (. .)         /* user-defined categories */
+    | "Reservation" (. .)
+    | "TimePeriod"  (. .)
+    | "DateTime"    (. .)
+    | "Duration"    (. .)
   .
 
   CategoryDecl<out Stmt stmt> =
@@ -232,18 +234,18 @@ PRODUCTIONS
 
   Primary <out Exp exp> =           /* assignment| Only for resource declarations */
       ident['.'ident] [ ( ":=" Exp<out exp> | "{" { VarDecl<out Stmt stmt> ";" } "}" ) ] 
-    | IF(FollowedByUnit()) Duration
+    | IF(FollowedByUnit()) Duration <out exp>
     | number              // NumV to be determined, needs to cover both ints and floats
     | stringLit           (. exp = new StringV(t.line, t.val);  .)
     | "true"              (. exp = new BoolV(t.line, true);  .)
     | "false"             (. exp = new BoolV(t.line, false);  .)
     | "(" Exp<out exp> ")"
     | TimeExp
-    | DateTime
+    | DateTime <out exp>
     | AvailabilityExp
     | ReservationAtomExp
-    | "reschedule" ident TimeExp          /* For reservations */
-    | "use" ident "(" [ ArgumentList ] ")"/* Template invocation */
+    | "reschedule" ident TimeExp           /* For reservations */
+    | "use" ident "(" [ ArgumentList ] ")" /* Template invocation */
   .
 
   ArgumentList =
@@ -273,12 +275,12 @@ PRODUCTIONS
   .
 
 /*________________TIME__________________________________________*/
-  TimeExp= "from" DateTime ("to" DateTime | "for" Duration) .
+  TimeExp = "from" DateTime ("to" DateTime | "for" Duration) .
 
-  DateTime = dateLit timeLit  [ ("+" | "-") Duration ] .
+  DateTime <out Exp exp> = dateLit timeLit  [ ("+" | "-") Duration ] .
 
   /*alternative that does not enforce unit structure/repetition = number Unit {number Unit} */
-  Duration = 
+  Duration <out Exp exp> = 
       IF(FollowedByWeek()) number ("w" | "week" | "weeks") [number ("d" | "day" | "days" )] [number ("h" | "hour" | "hours" )] [number ("m" | "minute" | "minutes")]
     | IF(FollowedByDay()) number ("d" | "day" | "days" ) [number ("h" | "hour" | "hours" )] [number ("m" | "minute" | "minutes")]
     | IF(FollowedByHour()) number ("h" | "hour" | "hours" ) [number ("m" | "minute" | "minutes")]

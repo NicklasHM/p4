@@ -14,7 +14,6 @@ abstract record class Stmt(int LineNumber);
 record class Composite(int LineNumber, Stmt? Stmt1, Stmt? Stmt2 ) : Stmt(LineNumber);
 
 record class VarDecl(int LineNumber, Type Type, string Identifier, Exp? Expression) : Stmt(LineNumber);
-
 record class CategoryDecl (int LineNumber, string CategoryId, string? ParentId) : Stmt(LineNumber);
 
 record class TemplateDecl(int LineNumber, string TemplateId, string paramList, Stmt? TemplateBody) : Stmt(LineNumber);
