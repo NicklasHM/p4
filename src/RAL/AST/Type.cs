@@ -1,1 +1,3 @@
-abstract class Type{};
+namespace RAL.AST;
+
+public abstract class Type { }
