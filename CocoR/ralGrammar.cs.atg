@@ -293,7 +293,9 @@ PRODUCTIONS
     [ (
         ":="
         Exp<out exp>    (. exp = new Assignment(lineNumber, variableId, propertyId, exp); .)
-      /* |  Must have requirement: Update a Resource. Ask Giovanni
+      /* |  Must have requirement: Update a Resource. 
+            Property values can be assigned with above, 
+            without below the set of properties cannot be changed/reasigned.  Ask Giovanni
         "{"
             VarDecls<out Stmt stmt> ";" 
         "}" 
