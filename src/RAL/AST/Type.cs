@@ -7,9 +7,9 @@ public sealed class BoolT : Type {
     private BoolT() {}
 }
 
-public sealed class IntT : Type {
-    public static readonly IntT Instance = new();
-    private IntT() {}
+public sealed class NumberT : Type {
+    public static readonly NumberT Instance = new();
+    private NumberT() {}
 }
 
 public sealed class StringT : Type {
@@ -35,4 +35,9 @@ public sealed class DurationT : Type {
 public sealed class DateTimeT : Type {
     public static readonly DateTimeT Instance = new();
     private DateTimeT() {}
+}
+
+public sealed class CategoryT : Type {
+    public static readonly CategoryT Instance = new();
+    private CategoryT() {}
 }

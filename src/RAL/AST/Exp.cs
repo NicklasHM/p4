@@ -14,7 +14,7 @@ record class BoolV(int LineNumber, bool Value) : Exp(LineNumber);
 
 record class StringV(int LineNumber, string Value) : Exp(LineNumber);
 
-record class NumV(int LineNumber, float Value) : Exp(LineNumber);
+record class NumberV(int LineNumber, float Value) : Exp(LineNumber);
 
 record class DurationV(int LineNumber, int Value) : Exp(LineNumber);
 
@@ -24,6 +24,7 @@ record class ReservationV(int LineNumber, Reservation Value) : Exp(LineNumber);
 
 record class ResourceV(int LineNumber, Resource Value) : Exp(LineNumber);
 
+record class VariableV(int LineNumber, string Value) : Exp(LineNumber);
 
 enum BinaryOperator
 {
