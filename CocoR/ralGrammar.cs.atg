@@ -269,15 +269,15 @@ PRODUCTIONS
     [ "not" ] Primary <out exp> /*Unary negation relevant for boolean expressions.*/ 
   .
 
-  Primary <out Exp exp> =           /* assignment| Only for resource declarations */
+  Primary <out Exp exp> =
       ReferenceOrAssignment<out exp>
-    | IF(FollowedByUnit()) Duration
+    | IF(FollowedByUnit()) Duration<out exp>
     | number              // NumV to be determined, needs to cover both ints and floats
     | stringLit           (. exp = new StringV(t.line, t.val);  .)
     | "true"              (. exp = new BoolV(t.line, true);  .)
     | "false"             (. exp = new BoolV(t.line, false);  .)
     | "(" Exp<out exp> ")"
-    | DateTime
+    | DateTime<out exp>             
     | AvailabilityExp // may not need to be an expresssion
     | ReservationAtomExp
     | "reschedule" ident TimeExp          /* For reservations */
@@ -290,7 +290,7 @@ PRODUCTIONS
     ['.'
       ident             (. propertyId = t.val; exp = new Reference(lineNumber, variable, propertyId); .)
     ] 
-    [ (
+    [ (  // Assignment
         ":="
         Exp<out exp>    (. exp = new Assignment(lineNumber, variableId, propertyId, exp); .)
       /* |  Must have requirement: Update a Resource. 
@@ -340,18 +340,31 @@ PRODUCTIONS
   .
 
 /*__________________________________________TIME__________________________________________*/
-  TimeExp= "from" DateTime ("to" DateTime | "for" Duration) .
 
-  DateTime = dateLit timeLit  [ ("+" | "-") Duration ].
+  TimeExp =                        //Typechecker requires:
+    "from" Exp<out Exp dateTime>   // DateTime
+    ( "to" Exp<out Exp toDatetime> // DateTime
+    | "for" Exp<out Exp duration>  // Duration
+    ) 
+  .
+
+  DateTime<out Exp exp> = dateLit timeLit (. exp = new DateTimeV(t.line, t.val); .) .
 
   /*alternative that does not enforce unit structure/repetition = number Unit {number Unit} */
-  Duration = 
+  Duration<out Exp exp> = 
       IF(FollowedByWeek()) number ("w" | "week" | "weeks") [number ("d" | "day" | "days" )] [number ("h" | "hour" | "hours" )] [number ("m" | "minute" | "minutes")]
     | IF(FollowedByDay()) number ("d" | "day" | "days" ) [number ("h" | "hour" | "hours" )] [number ("m" | "minute" | "minutes")]
     | IF(FollowedByHour()) number ("h" | "hour" | "hours" ) [number ("m" | "minute" | "minutes")]
     | number ("m" | "minute" | "minutes")
   .
 
-  Recurrence = "recurring" ( "strict" | "flexible" ) "every" Duration ( "until" DateTime | "for" Duration ) .
+  /*                                     Required types: */                   
+  Recurrence = 
+    "recurring" ( "strict" | "flexible" ) 
+    "every" Exp<out Exp duration>         // Duration
+    ( "until" Exp<out Exp toDatetime>     // DateTime
+    | "for" Exp<out Exp forDuration>      // Duration
+    ) 
+  .
 
 END ResourceAvailability.

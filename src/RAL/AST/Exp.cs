@@ -14,6 +14,9 @@ record class BoolV(int LineNumber, bool Value) : Exp(LineNumber);
 record class StringV(int LineNumber, string Value) : Exp(LineNumber);
 record class Reference(int LineNumber, string VariableId, string? PropertyId) : Exp(LineNumber);
 
+record class DateTimeV(int LineNumber, DateTime Value) : Exp(LineNumber);
+record class DurationV(int LineNumber, TimeSpan Value) : Exp(LineNumber);
+
 enum BinaryOperator
 {
     OR, AND, SEQ,
@@ -35,5 +38,3 @@ record class QueryExp(int LineNumber, ResourceExp Resource, TimeExp Time, Exp? E
 
 record class TimeExp(int LineNumber, DateTime StartDate, DateTime? ToDate, Duration? ForTime) : Exp(LineNumber);
 record class ResourceExp(int LineNumber, Exp? AdditiveExp, string? MoreOf, string Identifier, ResourceExp? AndResource) : Exp(LineNumber);
-
-record class Duration(int LineNumber );
