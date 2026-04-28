@@ -2,8 +2,5 @@ namespace RAL.TC;
 using RAL.AST;
 
 public class EnvC {
-    List<string> C = new();
-
-
-
+    public HashSet<string> C = new();
 }

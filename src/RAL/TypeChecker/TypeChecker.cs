@@ -5,7 +5,7 @@ class TypeChecker {
 
     public List<string> errors = new();
 
-    private Type ExpType(Exp exp, EnvV env) {
+    private Type ExpType(Exp exp, EnvV envV, EnvC envC, EnvH envH) {
         switch(exp) {
             case BoolV:        return BoolT;
             case StringV:      return StringT;
@@ -14,23 +14,23 @@ class TypeChecker {
             case DateTimeV:    return DateTimeT;
             case ResourceV:    return ResourceT;
             case ReservationV: return ReservationT;
-            case RefV r:       return env.Lookup(r.VariableId); // return the type of the variable
-            case BinaryOperation: { // turn into function to avoid confusing nesting?
-                Type left  = ExpType(exp.LeftExpression,  env);
-                Type right = ExpType(exp.RightExpression, env);
+            case RefV r:       return envV.Lookup(r.VariableId); // return the type of the variable
+            case BinaryOperation exp: { // turn into function to avoid confusing nesting?
+                Type left  = ExpType(exp.LeftExpression,  envV, envC, envH);
+                Type right = ExpType(exp.RightExpression, envV, envC, envH);
                 switch(exp.Operator) {
                      case BinaryOperator.ADD:
                      case BinaryOperator.SUB: {
                         switch(left, right) {
-                            case (NumberT, NumberT): break; // num + num
-                            case (DateTimeT, DurationT): break; // dt + dur
+                            case (NumberT, NumberT): return NumberT; // num + num
+                            case (DateTimeT, DurationT): return DateTimeT; // dt + dur
                             default: errors.Add($"Line {exp.LeftExpression.LineNumber}: Operands '{left}' and '{right}' are incompatible for '{(exp.Operator == BinaryOperator.ADD ? '+' : '-')}'."); break;            
                         }  
                     }
                     case BinaryOperator.MUL:
                     case BinaryOperator.DIV: {
                          switch(left, right) {
-                            case (NumberT, NumberT): break;
+                            case (NumberT, NumberT): return NumberT;
                             default: errors.Add($"Line {exp.LeftExpression.LineNumber}: Operands '{left}' and '{right}' are incompatible for '{(exp.Operator == BinaryOperator.MUL ? '*' : '/')}'."); break;                      
                         }       
                     }
@@ -39,36 +39,36 @@ class TypeChecker {
                     case BinaryOperator.LTEQ:
                     case BinaryOperator.GTEQ: {
                         switch(left, right) {
-                            case (NumberT, NumberT): break;
+                            case (NumberT, NumberT): return BoolT;
                             default: errors.Add($"Line {exp.LeftExpression.LineNumber}: Operands '{left}' and '{right}' are incompatible for '{(exp.Operator == BinaryOperator.LT ? "<" : exp.Operator == BinaryOperator.GT ? ">" : exp.Operator == BinaryOperator.LTEQ ? "<=" : ">=")}'."); break;           
                         }            
                     }
                     case BinaryOperator.EQ:
                     case BinaryOperator.NEQ: {
                          switch(left, right) {
-                            case(BoolT, BoolT): break;
-                            case(NumberT, NumberT): break;
+                            case(BoolT, BoolT): return BoolT;
+                            case(NumberT, NumberT): return BoolT;
                             default: errors.Add($"Line {exp.LeftExpression.LineNumber}: Operands '{left}' and '{right}' are incompatible for '{(exp.Operator == BinaryOperator.EQ ? "==" : "!=")}'."); break;                                  
                         }       
                     }
                     case BinaryOperator.OR: {
                         switch(left, right) {
-                             case(BoolT, BoolT): break;
-                             case(ReservationT, ReservationT): break;
+                             case(BoolT, BoolT): BoolT;
+                             case(ReservationT, ReservationT): ReservationT;
                              default: errors.Add($"Line {exp.LeftExpression.LineNumber}: Operands '{left}' and '{right}' are incompatible for 'or'."); break;                                           
                         }            
                     }
                     case BinaryOperator.AND: {
                         switch(left, right) {
-                            case(ResourceT, ResourceT): break;
-                            case(ReservationT, ReservationT): break;
-                            case(BoolT, BoolT): break;
+                            case(ResourceT, ResourceT): break; // ?????
+                            case(ReservationT, ReservationT): ReservationT;
+                            case(BoolT, BoolT): BoolT;
                             default: errors.Add($"Line {exp.LeftExpression.LineNumber}: Operands '{left}' and '{right}' are incompatible for 'and'."); break;                                          
                         }            
                     }
                     case BinaryOperator.SEQ: {
                         switch(left, right) {
-                            case(ReservationT, ReservationT): break;
+                            case(ReservationT, ReservationT): ReservationT;
                             default: errors.Add($"Line {exp.LeftExpression.LineNumber}: Operands '{left}' and '{right}' are incompatible for 'seq'."); break;                                              
                         } 
                     }
@@ -103,25 +103,25 @@ record VariableType(string TypeName) : TypeInfo;
 
 record FunctionType(List<string> ParameterTypes) : TypeInfo;
 
-Dictionary<string, TypeInfo> env = new();
+Dictionary<string, TypeInfo> EnvV = new();
 
-if (env["f"] is FunctionType func)
+if (EnvV["f"] is FunctionType func)
 {
     Console.WriteLine(string.Join(", ", func.ParameterTypes));
 }
-else if (env["x"] is VariableType v)
+else if (EnvV["x"] is VariableType v)
 {
     Console.WriteLine(v.TypeName);
 }
 
-env["x"] = new VariableType("int");
+EnvV["x"] = new VariableType("int");
 
-env["f"] = new FunctionType(
+EnvV["f"] = new FunctionType(
     new List<string> { "int", "bool" },
     "string"
 );
 
-TypeInfo info = env["f"];
+TypeInfo info = EnvV["f"];
 
 switch (info)
 {

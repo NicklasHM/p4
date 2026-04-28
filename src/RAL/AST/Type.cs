@@ -17,9 +17,12 @@ public sealed class StringT : Type {
     private StringT() {}
 }
 
-public sealed class ResourceT : Type {
-    public static readonly ResourceT Instance = new();
-    private ResourceT() {}
+public sealed class ResourceT : Type { // holds specific category as well
+    public string Category { get; }
+
+    public ResourceT(string category) {
+        Category = category;
+    }
 }
 
 public sealed class ReservationT : Type {
