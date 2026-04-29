@@ -32,7 +32,7 @@ public class EnvV {
 
 
     public Type Lookup(string var) {
-        if (E.TryGetValue(var, out var type)) {
+        if (E.TryGetValue(var, out Type type)) {
             return type;
         } else if (parent != null) {
             return parent.Lookup(var);
