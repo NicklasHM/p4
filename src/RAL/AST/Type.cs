@@ -2,45 +2,18 @@ namespace RAL.AST;
 
 public interface Type {}
 
-public sealed class BoolT : Type {
-    public static readonly BoolT Instance = new();
-    private BoolT() {}
-}
+public sealed record BoolT : Type;
 
-public sealed class NumberT : Type {
-    public static readonly NumberT Instance = new();
-    private NumberT() {}
-}
+public sealed record NumberT : Type;
 
-public sealed class StringT : Type {
-    public static readonly StringT Instance = new();
-    private StringT() {}
-}
+public sealed record StringT : Type;
 
-public sealed class ResourceT : Type { // holds specific category as well
-    public string Category { get; }
+public sealed record ResourceT(string Category) : Type; // holds the specific category
 
-    public ResourceT(string category) {
-        Category = category;
-    }
-}
+public sealed record ReservationT : Type;
 
-public sealed class ReservationT : Type {
-    public static readonly ReservationT Instance = new();
-    private ReservationT() {}
-}
+public sealed record DurationT : Type;
 
-public sealed class DurationT : Type {
-    public static readonly DurationT Instance = new();
-    private DurationT() {}
-}
+public sealed record DateTimeT : Type;
 
-public sealed class DateTimeT : Type {
-    public static readonly DateTimeT Instance = new();
-    private DateTimeT() {}
-}
-
-public sealed class CategoryT : Type {
-    public static readonly CategoryT Instance = new();
-    private CategoryT() {}
-}
+public sealed record CategoryT : Type;

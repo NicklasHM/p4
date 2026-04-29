@@ -18,12 +18,12 @@ record class CategoryDecl (int LineNumber, string CategoryId, string? ParentId) 
 
 record class TemplateDecl(int LineNumber, string TemplateId, string paramList, Stmt? TemplateBody) : Stmt(LineNumber);
 
-record class Param(int LineNumber, Type Type, string Identifier) : Stmt(LineNumber);
-
 record class Move(int LineNumber, string ResourceId, string CategoryId ) : Stmt(LineNumber);
 
 record class Cancel(int LineNumber, string ReservationId) : Stmt(LineNumber);
 
 record class If(int LineNumber, Exp Condition, Stmt? ThenBody, Stmt? ElseBody) : Stmt(LineNumber);
+
+record class Param(int LineNumber, Type Type, string Identifier) : Stmt(LineNumber);
 
 record class ExpStmt(int LineNumber, Exp Expression) : Stmt(LineNumber);
