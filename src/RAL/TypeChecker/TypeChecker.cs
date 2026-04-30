@@ -1,4 +1,3 @@
-using System.Net.NetworkInformation;
 using RAL.AST;
 namespace RAL.TC;
 
@@ -6,17 +5,21 @@ class TypeChecker {
 
     public List<string> errors = new();
 
-    private Type ExpType(Exp exp, EnvV envV, EnvC envC, EnvH envH) {
+    private Type ExpType(Exp exp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         switch(exp) {
             case BoolV:        return new BoolT();
             case StringV:      return new StringT();
             case NumberV:      return new NumberT();
             case DurationV:    return new DurationT();
             case DateTimeV:    return new DateTimeT();
-            case Reference r:  return envV.Lookup(r.VariableId); // return the type of the variable
-            case BinaryOperation exp: { // turn into function to avoid confusing nesting?
-                Type left  = ExpType(exp.LeftExpression,  envV, envC, envH);
-                Type right = ExpType(exp.RightExpression, envV, envC, envH);
+            case Reference r:  {
+                if(r.PropertyId == null) return envV.Lookup(r.VariableId);
+                return envR.LookupField(r.VariableId, r.PropertyId); 
+            }
+
+            case BinaryOperation exp: {
+                Type left  = ExpType(exp.LeftExpression,  envV, envC, envH, envT, envR);
+                Type right = ExpType(exp.RightExpression, envV, envC, envH, envT, envR);
                 switch(exp.Operator) {
                      case BinaryOperator.ADD:
                      case BinaryOperator.SUB: {
@@ -75,7 +78,7 @@ class TypeChecker {
                 }
             }
             case UnaryOperation uExp: {
-                Type type = ExpType(uExp.Expression, envV, envC, envH);
+                Type type = ExpType(uExp.Expression, envV, envC, envH, envT, envR);
                 switch(uExp.Operator) {
                     case UnaryOperator.NOT: {
                         switch(type) {
@@ -101,11 +104,39 @@ class TypeChecker {
                 Type varType = envV.Lookup(a.VariableId);
                 switch(varType) {
                     case ResourceT: errors.Add($"Assignment to resources not allowed"); break;
-                    default: break;        
+                    default: break;
                 }
-                Type expType = ExpType(a.Value, envV, envC, envH);
+                Type expType = ExpType(a.Value, envV, envC, envH, envT, envR);
                 if(expType != varType) errors.Add($"Variable ${a.VariableId} expected type ${varType} but got ${expType}.");      
                 break;
+            }
+
+            case Reserve r: {
+                // new scope environment? for query
+                if(queryIsWellTyped(r.Query, envV, envC, envH, envT, envR)) return new ReservationT();
+                else break;
+            }
+
+            case TemplateCall tc: {
+                List<Type> formalParams = envT.Lookup(tc.TemplateId);
+                if(formalParams != null && tc.ArgList != null) {
+                    if(formalParams.Count != tc.ArgList.Count) errors.Add($"{tc.TemplateId} expected {formalParams.Count} arguments got {tc.ArgList.Count}");
+                    for (int i = 0; i < formalParams.Count; i++) {
+                        Type expected = formalParams[i];
+                        Type actual = ExpType(tc.ArgList[i], envV, envC, envH, envT, envR);
+                        if (envH.IsSubtype(actual, expected)) throw new Exception($"Argument {i + 1} of template '{tc.TemplateId}' expected {expected} but got {actual}.");
+                    }
+                }
+                break;
+            }
+
+            case Reschedule r: {
+                if(timeSpecIsWellTyped(r.NewTimeInterval, envV, envC, envH, envT, envR));
+                Type expType = ExpType(r.Reservation, envV, envC, envH, envT, envR);
+                switch(expType) {
+                    case ReservationT: return new ReservationT();
+                    default: errors.Add($"Expected type 'reservation' got '{expType}'"); break;       
+                }
             }
 
             default: throw new Exception("Unknown type."); // should never happen
@@ -113,10 +144,11 @@ class TypeChecker {
 
     }
 
-    private bool checkQueryExp(QueryData queryData, EnvV envV, EnvC envC, EnvH envH) {
+    private bool queryIsWellTyped(QueryData queryData, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        
         foreach(ResourceSpec resource in queryData.ResourceSpecs) {
             if(resource.Quantity != null) {
-                Type resQuantType = ExpType(resource.Quantity, envV, envC, envH);
+                Type resQuantType = ExpType(resource.Quantity, envV, envC, envH, envT, envR);
                 switch(resQuantType) {
                     case NumberT: break;
                     default: {
@@ -125,21 +157,13 @@ class TypeChecker {
                     }
                 }
                 if(resource.CategoryId != null && !envC.C.Contains(resource.CategoryId)) errors.Add($"Undeclared category '{resource.CategoryId}'");
-                // identifier
             }
         }
-        Type fromType = ExpType(queryData.Interval.Start, envV, envC, envH);
-        Type toType = ExpType(queryData.Interval.EndMarker, envV, envC, envH);
-        switch(fromType, toType) {
-            case(DateTimeT, DateTimeT): break;
-            case(DateTimeT, DurationT): break;
-            default: {
-                errors.Add($"Types {fromType} and {toType} incompatible with interval expression");
-                return false;            
-            }
-        }
+
+        if(!timeSpecIsWellTyped(queryData.Interval, envV, envC, envH, envT, envR)) return false;
+
         if(queryData.Condition != null) {
-            Type condType = ExpType(queryData.Condition, envV, envC, envH);
+            Type condType = ExpType(queryData.Condition, envV, envC, envH, envT, envR);
             switch(condType) {
                 case BoolT: break;
                 default: {
@@ -150,10 +174,10 @@ class TypeChecker {
         }
 
         if(queryData.Recurrence != null) {
-            Type everyType = ExpType(queryData.Recurrence.EveryDuration, envV, envC, envH);
-            Type endType = ExpType(queryData.Recurrence.EndMarker, envV, envC, envH);
+            Type everyType = ExpType(queryData.Recurrence.EveryDuration, envV, envC, envH, envT, envR);
+            Type endType = ExpType(queryData.Recurrence.EndMarker, envV, envC, envH, envT, envR);
             switch(everyType, endType) {
-                case(DurationT, DateTimeT): break;
+                case(DurationT, DateTimeT): break; // needs way to distinguish between for/until
                 case(DurationT, DurationT): break;
                 default: {
                     errors.Add($"Types '{everyType}' and '{endType}' incompatible for recurrence.");
@@ -164,22 +188,43 @@ class TypeChecker {
         return true;
     }
 
+    private bool timeSpecIsWellTyped(TimeSpec timeSpec, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        Type fromType = ExpType(timeSpec.Start, envV, envC, envH, envT, envR);
+        Type toType = ExpType(timeSpec.EndMarker, envV, envC, envH, envT, envR);
+        switch(fromType, toType) {
+            case(DateTimeT, DateTimeT): return true; // needs way to distinguish between to/for
+            case(DateTimeT, DurationT): return true; 
+            default: {
+                errors.Add($"Types {fromType} and {toType} incompatible with interval expression");
+                return false;            
+            }
+        }
+    }
 
-    private void StmtType(Stmt stmt, EnvV envV, EnvC envC, EnvH envH) {
+
+    private void StmtType(Stmt stmt, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         switch(stmt) {
             case Composite cmp: {
-                StmtType(cmp.Stmt1, envV, envC, envH); // check null
-                StmtType(cmp.Stmt2, envV, envC, envH); // check null
+                if(cmp.Stmt1 != null) StmtType(cmp.Stmt1, envV, envC, envH, envT, envR);
+                if(cmp.Stmt2 != null) StmtType(cmp.Stmt2, envV, envC, envH, envT, envR);
                 break;     
             }
+
             case VarDecl decl: {
                 switch(decl.Type) {
                     case ResourceT r: if(!envC.C.Contains(r.Category)) throw new Exception($"Use of undeclared category '{r.Category}'."); break;
                     default: break;  
-                    }       
-                }
+                }       
                 envV.Bind(decl.Identifier, decl.Type); // still binds even if types dont match; is a problem
                 break;
+            }
+
+            case ResourceDecl rd: { // WIP
+                if(rd.Properties != null) {
+                    
+                }
+                break;
+            }
         
             case CategoryDecl cd: {
                 if(envC.C.Contains(cd.CategoryId)) errors.Add($"Category '{cd.CategoryId}' has already been declared.");
@@ -207,7 +252,7 @@ class TypeChecker {
             }
 
             case Cancel c: {
-                Type type = ExpType(c.Reservation, envV, envC, envH);
+                Type type = ExpType(c.Reservation, envV, envC, envH, envT, envR);
                 switch(type) { 
                     case ReservationT: break;
                     default: errors.Add($"Expected type 'Reservation' got: {type}."); break;  
@@ -216,18 +261,27 @@ class TypeChecker {
             }
 
             case If i: {
-                Type type = ExpType(i.Condition, envV, envC, envH);
+                Type type = ExpType(i.Condition, envV, envC, envH, envT, envR);
                 switch(type) {
                     case BoolT: break;
                     default: errors.Add($"If statement expects condition of type 'bool' got '{type}'"); break;      
                 }
-                if(i.ThenBody != null) StmtType(i.ThenBody, envV.NewScope(), envC, envH);        
-                if(i.ElseBody != null) StmtType(i.ElseBody, envV.NewScope(), envC, envH);
+                if(i.ThenBody != null) StmtType(i.ThenBody, envV.NewScope(), envC, envH, envT, envR);        
+                if(i.ElseBody != null) StmtType(i.ElseBody, envV.NewScope(), envC, envH, envT, envR);
                 break;
             }
 
             case TemplateDecl tmplDecl: {
-                //some code
+                EnvV tmplScope = envV.NewScope();
+                if(tmplDecl.ParamList != null) {
+                    List<Type> paramTypes = new();
+                    foreach(VarDecl param in tmplDecl.ParamList) {
+                        paramTypes.Add(param.Type);
+                        tmplScope.Bind(param.Identifier, param.Type);
+                    }
+                    envT.Bind(tmplDecl.TemplateId, paramTypes);
+                }
+                if(tmplDecl.TemplateBody != null) StmtType(tmplDecl.TemplateBody, tmplScope, envC, envH, envT, envR);
                 break;
             }
 
@@ -236,52 +290,14 @@ class TypeChecker {
             }
 
             case Availability av: {
-                
+                queryIsWellTyped(av.Query, envV, envC, envH, envT, envR); break;
             }
 
         }
     }
-
 }
 
 
-
-/*
-abstract record TypeInfo;
-
-record VariableType(string TypeName) : TypeInfo;
-
-record FunctionType(List<string> ParameterTypes) : TypeInfo;
-
-Dictionary<string, TypeInfo> EnvV = new();
-
-if (EnvV["f"] is FunctionType func)
-{
-    Console.WriteLine(string.Join(", ", func.ParameterTypes));
-}
-else if (EnvV["x"] is VariableType v)
-{
-    Console.WriteLine(v.TypeName);
-}
-
-EnvV["x"] = new VariableType("int");
-
-EnvV["f"] = new FunctionType(
-    new List<string> { "int", "bool" },
-    "string"
-);
-
-TypeInfo info = EnvV["f"];
-
-switch (info)
-{
-    case VariableType v:
-        Console.WriteLine($"Variable of type {v.TypeName}");
-        break;
-
-    case FunctionType f:
-        Console.WriteLine($"Function with params: {string.Join(", ", f.ParameterTypes)}");
-        break;
-}
-
-*/
+// STATEMENTS:
+// expStmt          ??
+// resourceDecl     ??
