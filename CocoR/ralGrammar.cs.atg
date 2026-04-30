@@ -184,24 +184,24 @@ PRODUCTIONS
     ]                   (. stmt = new CategoryDecl (lineNumber, categoryId, parentId);  .)
   .
 
-  TemplateDecl<out Stmt stmt> =
-    "template"                (. int lineNumber = t.line; Stmt paramStmt = new Skip(lineNumber); .)
-    ident                     (. string templateId = t.val; .)
-    "(" [ ParamList<out paramStmt> ] ")" "{"
+  TemplateDecl<out Stmt stmt> = 
+    "template"                  (. int lineNumber = t.line; List<VarDecl> paramList = null; .)
+    ident                       (. string templateId = t.val; .)
+    "(" 
+    [                              (. paramList = new List<VarDecl>(); .)
+      Param<out VarDecl param>       (. paramList.Add(param);.)
+      { ","                    
+        Param<out VarDecl nextParam> (. paramList.Add(nextParam); .)
+      }
+    ] 
+    ")" "{"
       Stmts<out Stmt body>    
-    "}"                       (.stmt = new TemplateDecl(lineNumber, templateId, paramStmt, body); .)
+    "}"                       (.stmt = new TemplateDecl(lineNumber, templateId, paramList, body); .)
   .
-
-  ParamList<out Stmt stmt> = (. List<Stmt> paramList = new List<Stmt>();.) 
-    Param<out Stmt stmt1>    (. paramList.Add(stmt1);.)
-    { ","                    
-      Param<out Stmt stmt2>  (. paramList.Add(stmt2); .)
-    }                        (. stmt = toComposite(paramList); .)
-  .
-
-  Param<out Stmt stmt> =
+  //New nonterminal which uses VarDecl node, because VarDecl nonterminal may return a composite
+  Param<out VarDecl param> =
     Type<out Type type> (. int lineNumber = t.line;.) 
-    ident               (. string identifier = t.val; stmt = new Param(lineNumber, type, identifier);.)
+    ident               (. string identifier = t.val; param = new VarDecl(lineNumber, type, identifier);.)
   .
 
   /*_______________Expessions: low to high precedence_______________*/

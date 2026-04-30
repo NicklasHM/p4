@@ -16,9 +16,7 @@ record class VarDecl(int LineNumber, Type Type, string Identifier) : Stmt(LineNu
 
 record class CategoryDecl (int LineNumber, string CategoryId, string? ParentId) : Stmt(LineNumber);
 
-record class TemplateDecl(int LineNumber, string TemplateId, Stmt? ParamList, Stmt? TemplateBody) : Stmt(LineNumber);
-
-record class Param(int LineNumber, Type Type, string Identifier) : Stmt(LineNumber);
+record class TemplateDecl(int LineNumber, string TemplateId, List<VarDecl>? ParamList, Stmt? TemplateBody) : Stmt(LineNumber);
 
 record class Move(int LineNumber, string ResourceId, string CategoryId ) : Stmt(LineNumber);
 
