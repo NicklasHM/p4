@@ -102,8 +102,10 @@ COMMENTS FROM "//" TO '\n'
 
 IGNORE '\r' + '\n' + '\t' + ' '
 
-/* out keyword
-https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/out
+/* 
+out keyword: https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/out
+t.val 
+t.line
 */
 PRODUCTIONS
 
@@ -185,11 +187,11 @@ PRODUCTIONS
   .
 
   TemplateDecl<out Stmt stmt> = 
-    "template"                  (. int lineNumber = t.line; List<VarDecl> paramList = null; .)
+    "template"                  (. int lineNumber = t.line; List<VarDecl>? paramList = null; .)
     ident                       (. string templateId = t.val; .)
     "(" 
     [                              (. paramList = new List<VarDecl>(); .)
-      Param<out VarDecl param>       (. paramList.Add(param);.)
+      Param<out VarDecl param>     (. paramList.Add(param);.)
       { ","                    
         Param<out VarDecl nextParam> (. paramList.Add(nextParam); .)
       }
@@ -198,6 +200,7 @@ PRODUCTIONS
       Stmts<out Stmt body>    
     "}"                       (.stmt = new TemplateDecl(lineNumber, templateId, paramList, body); .)
   .
+  
   //New nonterminal which uses VarDecl node, because VarDecl nonterminal may return a composite
   Param<out VarDecl param> =
     Type<out Type type> (. int lineNumber = t.line;.) 
@@ -285,8 +288,21 @@ PRODUCTIONS
     | "(" Exp<out exp> ")"
     | DateTime<out exp> 
     | ReservationAtomExp<out exp>
-    | "reschedule"  Exp<out Exp reservation>  Time<out TimeSpec timeInterval>   (. exp = new Reschedule(t.line, reservation, timeInterval); .)        /* For reservations */
-    | "use" ident "(" [ ArgumentList ] ")"/* Template invocation */
+    | "reschedule" Exp<out Exp reservation>  Time<out TimeSpec timeInterval>   (. exp = new Reschedule(t.line, reservation, timeInterval); .)        /* For reservations */
+    | TemplateCall<out exp>
+  . 
+  /* Template invocation, argList is null unless arguments have been provided */
+  TemplateCall<out Exp exp> =
+    "use"                     (. int lineNumber = t.line; .)
+    ident                     (. string templateId = t.val; List<Exp>? argList = null; .)
+    "("
+    [                         (. argList = new List<Exp>(); .)
+      Exp<out Exp arg>        (. argList.Add(arg);.)
+      { "," 
+        Exp<out Exp nextArg>  (. argList.Add(nextArg);.)
+      } 
+    ] 
+    ")"   (. exp = new TemplateCall(lineNumber, templateId, argList); .)
   .
 
   //Parses simple variable reference, field selection and assignment to both
@@ -307,13 +323,6 @@ PRODUCTIONS
         */
       ) 
     ] 
-  .
-
-  ArgumentList =
-    Exp<out Exp exp>
-    { "," 
-    Exp<out Exp exp2>
-    }
   .
 
 /*________________________ Domain Expessions ________________________*/
