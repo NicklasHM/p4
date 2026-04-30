@@ -168,14 +168,16 @@ PRODUCTIONS
   .
 
   Type <out Type type> =
-      "Number" | "Bool" | "String"
-    | "Resource"                  /* designates an element: a resource*/
-    | "Category"                  /* designates the class of categories*/
-    | ident                       /* user-defined categories */
-    | "Reservation"
-    | "TimePeriod"
-    | "DateTime"
-    | "Duration"
+      "Number"      (. .)
+    | "Bool"        (. .)
+    | "String"      (. .)
+    | "Resource"    (. .)         /* designates an element: a resource*/
+    | "Category"    (. .)         /* designates the class of categories*/
+    | ident         (. .)         /* user-defined categories */
+    | "Reservation" (. .)
+    | "TimePeriod"  (. .)
+    | "DateTime"    (. .)
+    | "Duration"    (. .)
   .
 
   CategoryDecl<out Stmt stmt> =

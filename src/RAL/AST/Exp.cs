@@ -26,6 +26,8 @@ record class DateTimeV(int LineNumber, DateTime Value) : Exp(LineNumber);
 
 record class DurationV(int LineNumber, TimeSpan Value) : Exp(LineNumber);
 
+record class NumberV(int LineNumber, float Value) : Exp(LineNumber);
+
 enum BinaryOperator
 {
     OR, AND, SEQ,
@@ -37,5 +39,5 @@ enum BinaryOperator
 
 enum UnaryOperator
 {
-    NOT//, NEG
+    NOT, NEG
 }
