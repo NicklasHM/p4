@@ -8,11 +8,6 @@ class Program {
             return;
         }
 
-        if (args[0] == "--run-tests") {
-            EnvTest.Run();
-            return;
-        }
-
         string filePath = args[0];
         if (!File.Exists(filePath)) {
             Console.WriteLine($"File not found: {filePath}");

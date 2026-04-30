@@ -1,3 +1,4 @@
+namespace RAL.Interpreter;
 /*
 new Env<T>() builds a scope.
 NewScope() builds a child scope inside the current scope

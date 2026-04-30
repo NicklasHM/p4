@@ -1,9 +1,7 @@
 namespace RAL.AST;
 
 /* Primary constructor syntax with positional parameters define constructor and properties in a single line.
-
-    Properties are init-only (immutable after construction).*/
-
+*  Properties are init-only (immutable after construction).*/
 
 /// <summary> Base record class representing Stmt nodes. Establishes a reference type. </summary>
 abstract record class Stmt(int LineNumber);
@@ -20,10 +18,9 @@ record class CategoryDecl (int LineNumber, string CategoryId, string? ParentId) 
 
 record class TemplateDecl(int LineNumber, string TemplateId, List<VarDecl>? ParamList, Stmt? TemplateBody) : Stmt(LineNumber);
 
-record class Param(int LineNumber, Type Type, string Identifier) : Stmt(LineNumber);
-
 record class Move(int LineNumber, string ResourceId, string CategoryId ) : Stmt(LineNumber);
 
+/*                                 might be id, might be a reserve expression */
 record class Cancel(int LineNumber, Exp Reservation) : Stmt(LineNumber);
 
 record class If(int LineNumber, Exp Condition, Stmt? ThenBody, Stmt? ElseBody) : Stmt(LineNumber);
@@ -31,3 +28,5 @@ record class If(int LineNumber, Exp Condition, Stmt? ThenBody, Stmt? ElseBody) :
 record class ExpStmt(int LineNumber, Exp Expression) : Stmt(LineNumber);
 
 record class Availability(int LineNumber, QueryData Query) : Stmt(LineNumber);
+
+record class Skip(int LineNumber) : Stmt(LineNumber);
