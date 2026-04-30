@@ -351,7 +351,7 @@ PRODUCTIONS
   .
 
   // a*rc id (qty of category with local variable binding for constraints) | r.
-   ResourceExp<. out List<ResourceSpec> resources .> = (. resources = new List<ResourceSpec>(); Exp? quantity = null; string? categoryId; string? identifier;.)   
+   ResourceExp<. out List<ResourceSpec> resources .> = (. resources = new List<ResourceSpec>(); Exp? quantity = null; string? categoryId = null; string? identifier = null; .)   
     ( 
       IF(FollowedByAND_or_FROM()) ident /* r */    (. identifier = t.val; .)
       |
