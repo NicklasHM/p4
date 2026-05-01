@@ -125,9 +125,9 @@ PRODUCTIONS
   = 
     (
       CategoryDecl<out stmt>
-      | TemplateDecl<out stmt> 
       | Move<out stmt> 
     ) ";"
+    | TemplateDecl<out stmt> 
     | IF(FollowedByIdent()) ResourceDecl<out stmt> //Lookahead resolver: ident here & Stmt -> Exp. Handles its own ";"
     | Stmt<out stmt> // allowed in any scope, outside grouping to avoid double ;;
   .
@@ -326,12 +326,12 @@ PRODUCTIONS
   = 
       ReferenceOrAssignment<out exp>
     | IF(FollowedByUnit()) Duration<out exp>
-    | number              // NumV to be determined, needs to cover both ints and floats
+    | number              (. exp = new NumV(t.line, t.val); .)// NumV to be determined, needs to cover both ints and floats
     | stringLit           (. exp = new StringV(t.line, t.val);  .)
     | "true"              (. exp = new BoolV(t.line, true);  .)
     | "false"             (. exp = new BoolV(t.line, false);  .)
     | "(" Exp<out exp> ")"
-    | DateTime<out exp> 
+    | DateTime<out exp>
     | ReservationAtomExp<out exp>
     | "reschedule" Exp<out Exp reservation>  Time<out TimeSpec timeInterval>   (. exp = new Reschedule(t.line, reservation, timeInterval); .)        /* For reservations */
     | TemplateCall<out exp>
