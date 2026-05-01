@@ -326,7 +326,7 @@ PRODUCTIONS
   = 
       ReferenceOrAssignment<out exp>
     | IF(FollowedByUnit()) Duration<out exp>
-    | number              (. exp = new NumV(t.line, t.val); .)// NumV to be determined, needs to cover both ints and floats
+    | number              (. exp = new NumberV(t.line, float.Parse(t.val)); .)// NumV to be determined, needs to cover both ints and floats
     | stringLit           (. exp = new StringV(t.line, t.val);  .)
     | "true"              (. exp = new BoolV(t.line, true);  .)
     | "false"             (. exp = new BoolV(t.line, false);  .)
