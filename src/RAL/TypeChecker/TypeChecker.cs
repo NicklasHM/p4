@@ -224,7 +224,6 @@ class TypeChecker {
   
     private bool QueryIsWellTyped(QueryData queryData, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
 
-
         if(!ResourceSpecIsWellTyped(queryData.ResourceSpecs, envV, envC, envH, envT, envR)) return false;
 
         if(!TimeSpecIsWellTyped(queryData.Interval, envV, envC, envH, envT, envR)) return false;
@@ -256,8 +255,7 @@ class TypeChecker {
     }
 
     //Check all resource specifications: a*rc ident | r
-    private bool ResourceSpecIsWellTyped(List<ResourceSpec> resourceSpecs, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR)
-    {
+    private bool ResourceSpecIsWellTyped(List<ResourceSpec> resourceSpecs, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         //new environment used only if a local variable binding is encountered
         EnvV reserveScope = envV.NewScope();
         
@@ -277,22 +275,18 @@ class TypeChecker {
                 }
 
                 //No need to check (resourceSpec.CategoryId != null) given quantity is not null, would be rejected by parser
-                if(!envC.C.Contains(resourceSpec.CategoryId))
-                {
+                if(!envC.C.Contains(resourceSpec.CategoryId)) {
                     errors.Add($"Use of undeclared category '{resourceSpec.CategoryId}'");
                     isWellTyped = false;
                 }
 
                 //hvis id findes så bind til nyt scope
-                if(resourceSpec.Identifier != null)
-                {
+                if(resourceSpec.Identifier != null) {
                     reserveScope.Bind(resourceSpec.Identifier, new ResourceT(resourceSpec.CategoryId));
                 }
             } 
-            else // r case, lookup in current scope, ensure its a Resource Type
-            {
-                if(envV.Lookup(resourceSpec.Identifier) is not ResourceT)
-                {
+            else {// r case, lookup in current scope, ensure its a Resource Type
+                if(envV.Lookup(resourceSpec.Identifier) is not ResourceT) {
                     errors.Add($"Wrong Type '{resourceSpec.Identifier}'");
                     isWellTyped = false;
                 }
@@ -304,8 +298,7 @@ class TypeChecker {
         TypeT fromType = ExpType(timeSpec.Start, envV, envC, envH, envT, envR);
         TypeT toType = ExpType(timeSpec.EndMarker, envV, envC, envH, envT, envR);
         
-        return (fromType, toType) switch
-        {
+        return (fromType, toType) switch {
             (DateTimeT, DateTimeT) => true, // needs way to distinguish between to/for
             (DateTimeT, DurationT) => true,
 
@@ -314,14 +307,12 @@ class TypeChecker {
     }
     
 
-    private TypeT HandleReschedule(Reschedule r, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) 
-    {
+    private TypeT HandleReschedule(Reschedule r, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         TimeSpecIsWellTyped(r.NewTimeInterval, envV, envC, envH, envT, envR);
 
         TypeT expType = ExpType(r.Reservation, envV, envC, envH, envT, envR);
         
-        return expType switch
-        {
+        return expType switch {
             ReservationT => new ReservationT(),
             _ => errors.Add($"Expected type 'reservation' got '{expType}'")       
         };
