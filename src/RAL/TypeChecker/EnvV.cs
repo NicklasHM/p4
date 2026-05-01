@@ -39,6 +39,7 @@ public class EnvV {
         throw new Exception($"Use of undeclared variable: '{var}'.");
     }
 
+    // unneeded
     public bool IsLocal(string var) {
         return E.ContainsKey(var);
     }

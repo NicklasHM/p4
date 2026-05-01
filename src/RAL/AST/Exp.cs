@@ -24,8 +24,6 @@ record class Reserve(int LineNumber, QueryData Query) : Exp(LineNumber);
 /*                                     might be id, might be a reserve expression */
 record class Reschedule(int LineNumber, Exp Reservation, TimeSpec NewTimeInterval) : Exp(LineNumber);
 
-record class TemplateCall(int LineNumber, string TemplateId, List<Exp>? ArgList) : Exp(LineNumber);
-
 enum BinaryOperator
 {
     OR, AND, SEQ,
