@@ -8,8 +8,11 @@ record class StringV(int LineNumber, string Value) : Exp(LineNumber);
 
 record class NumberV(int LineNumber, float Value) : Exp(LineNumber);
 
-record class DateTimeV(int LineNumber, DateTime Value) : Exp(LineNumber);
-record class DurationV(int LineNumber, TimeSpan Value) : Exp(LineNumber);
+/*TODO: string Value -> DateTime Value */
+record class DateTimeV(int LineNumber, string Value) : Exp(LineNumber);
+
+/*TODO: string Value -> TimeSpan Value */
+record class DurationV(int LineNumber, string Value) : Exp(LineNumber);
 record class Reference(int LineNumber, string VariableId, string? PropertyId) : Exp(LineNumber);
 
 //See the dictionary key type in /Interpreter/EnvV.cs for the choice of string type Identifier.
