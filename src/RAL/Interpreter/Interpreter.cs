@@ -21,7 +21,7 @@ public class Interpreter
 {
     private const float Epsilon = 0.00001f;
 
-    public Value EvalExp(Exp exp)
+    Value EvalExp(Exp exp)
     {
         return exp switch
         {

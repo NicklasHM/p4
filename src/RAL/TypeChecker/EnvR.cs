@@ -1,9 +1,10 @@
 namespace RAL.TC;
+using RAL.AST;
 
 public class EnvR {
-    public readonly Dictionary<string, Dictionary<string, Type>> R = new();
+    public readonly Dictionary<string, Dictionary<string, TypeT>> R = new();
 
-    public void BindField(string resource, string field, Type type) {
+    public void BindField(string resource, string field, TypeT type) {
         if (!R.TryGetValue(resource, out var fields))
             throw new Exception($"Unknown resource/category '{resource}'.");
 
@@ -13,9 +14,13 @@ public class EnvR {
         fields[field] = type;
     }
 
-    public Type LookupField(string resource, string fieldName) {
-        if (!R.TryGetValue(resource, out var fields)) throw new Exception($"Unknown resource '{resource}'.");
-        if (fields.TryGetValue(fieldName, out Type field)) return field;
+    public TypeT LookupField(string resource, string fieldName) {
+        if (!R.TryGetValue(resource, out var fields)) 
+            throw new Exception($"Unknown resource '{resource}'.");
+
+        if (fields.TryGetValue(fieldName, out TypeT fieldType)) 
+            return fieldType;
+
         throw new Exception($"Unknown field '{fieldName}' in resource '{resource}'.");
     }
 

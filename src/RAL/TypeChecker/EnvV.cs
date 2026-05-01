@@ -2,7 +2,7 @@ namespace RAL.TC;
 using RAL.AST;
 
 public class EnvV {
-    private readonly Dictionary<string, Type> E = new();
+    private readonly Dictionary<string, TypeT> E = new();
     private readonly EnvV? parent;
 
     public EnvV(EnvV? parent = null) {
@@ -13,7 +13,7 @@ public class EnvV {
         return new EnvV(this);
     }
 
-    public void Bind(string var, Type type) {
+    public void Bind(string var, TypeT type) {
         if (E.ContainsKey(var)) {
             throw new Exception($"Variable '{var}' already declared in current scope.");
         }
@@ -21,8 +21,7 @@ public class EnvV {
         E[var] = type;
     }
 
-
-    public void ChangeCategory(string var, Type type) {
+    public void ChangeCategory(string var, TypeT type) {
         if (E.ContainsKey(var)) {
             E[var] = type;
         } else {
@@ -30,17 +29,15 @@ public class EnvV {
         }
     }
 
-
-    public Type Lookup(string var) {
-        if (E.TryGetValue(var, out Type type)) {
+    public TypeT Lookup(string var) {
+        if (E.TryGetValue(var, out TypeT type)) 
             return type;
-        } else if (parent != null) {
-            return parent.Lookup(var);
-        } else {
-            throw new Exception($"Use of undeclared variable: '{var}'.");
-        }
-    }
 
+        if (parent != null) 
+            return parent.Lookup(var);
+        
+        throw new Exception($"Use of undeclared variable: '{var}'.");
+    }
 
     public bool IsLocal(string var) {
         return E.ContainsKey(var);
