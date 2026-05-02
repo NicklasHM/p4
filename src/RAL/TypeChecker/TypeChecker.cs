@@ -16,7 +16,7 @@ class TypeChecker {
             DurationV => new DurationT(),
 
             Reference r when r.PropertyId == null => envV.Lookup(r.VariableId),
-            Reference r => envR.LookupField(r.VariableId, r.PropertyId), // can never be null given the above check
+            Reference r => envR.LookupField(r.VariableId, r.PropertyId), // 'PropertyId' can never be null given the above check
 
             Assignment a => HandleAssignment(a, envV, envC, envH, envT, envR),
 
@@ -54,19 +54,13 @@ class TypeChecker {
 
             case Availability av: QueryIsWellTyped(av.Query, envV, envC, envH, envT, envR); break; // QueryIsWellTyped adds errors itself, no need to check in case as well
             
-            /*
-            case ResourceDecl rd: { // WIP
-                if(rd.Properties != null) {
-                    
-                }
-                break;
-            }
-            */
+            case ResourceDecl rd: HandleResourceDecl(rd, envV, envC, envH, envT, envR);
+            
             default: throw new Exception("Unknown statement."); // should never happen
         }
     }
 
-    private void HandleResourceDecl(ResourceDecl rd, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+    private void HandleResourceDecl(ResourceDecl rd, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) { // TODO: refactor
         if(rd.PropertyList != null) {
             TypeT varType = null;
             foreach(Stmt s in rd.PropertyList){
@@ -117,7 +111,7 @@ class TypeChecker {
                 envV.ChangeCategory(mv.ResourceId, new ResourceT(mv.CategoryId)); break;          
             }
             default: {
-                errors.Add($"Expected type 'Resource' got '{type}'"); // type --> string conversion unsure
+                errors.Add($"Expected type 'Resource' got '{type}'"); // type --> string conversion unsure? override .toString() for each TypeT implementing record
                 break;           
             }
         }
@@ -165,7 +159,7 @@ class TypeChecker {
         {
             BinaryOperator.ADD or 
             BinaryOperator.SUB => (left, right) switch {
-                (NumberT, NumberT)     => new NumberT(), // num + num
+                (NumberT, NumberT)     => new NumberT(),  // num + num
                 (DateTimeT, DurationT) => new DateTimeT(), // dt + dur
                 _ => Error(exp, left, right, operatorAsString, new NumberT()) // assume user wanted number; terribleness
             },
@@ -239,36 +233,33 @@ class TypeChecker {
 
     //Check all resource specifications: a*rc ident | r
     private bool ResourceSpecIsWellTyped(List<ResourceSpec> resourceSpecs, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
-        // new environment used only if a local variable binding is encountered
-        // new scope should be used no matter what? what if a rc id is mixed with id? new scope for all
-        EnvV reserveScope = envV.NewScope();
+
+        EnvV reserveScope = envV.NewScope(); // Reservations allow for local declarations; create local scope
         
         bool isWellTyped = true;
         
-        foreach(ResourceSpec resourceSpec in resourceSpecs) {
+        foreach(ResourceSpec resourceSpec in resourceSpecs) { // loop over the [a rc ident] and [a rc ident] and [a rc ident] and ...
             
-            // a rc [ident]
-            if(resourceSpec.Quantity != null) {
-                TypeT quantityType = ExpType(resourceSpec.Quantity, envV, envC, envH, envT, envR); // new scope ?
+            if(resourceSpec.Quantity != null) { // The 'a' in [a rc ident] is not required, i.e. if the user simply puts an already declared 'ident'
+                TypeT quantityType = ExpType(resourceSpec.Quantity, envV, envC, envH, envT, envR); // evaluate 'a'
                 
-                if (quantityType is not NumberT) {
+                if (quantityType is not NumberT) { // make sure it evaluates to a number
                     errors.Add($"Expected type 'number' got '{quantityType}'");
                     isWellTyped = false; // doesnt break given future errors still should be logged
                 }
 
-                //No need to check (resourceSpec.CategoryId != null) given quantity is not null, would be rejected by parser
+                //No need to check (resourceSpec.CategoryId != null) given quantity is not null; would be rejected by parser. 'rc ident' not allowed, must be of form 'a rc' or 'a rc ident'
                 if(!envC.C.Contains(resourceSpec.CategoryId)) {
                     errors.Add($"Use of undeclared category '{resourceSpec.CategoryId}'");
                     isWellTyped = false; // doesnt break given future errors still should be logged
                 }
 
-                //hvis id findes så bind til nyt scope
-                if(resourceSpec.Identifier != null) {
-                    reserveScope.Bind(resourceSpec.Identifier, new ResourceT(resourceSpec.CategoryId));
+                if(resourceSpec.Identifier != null) { // The 'ident' in [a rc ident] refers to a new variable here
+                    reserveScope.Bind(resourceSpec.Identifier, new ResourceT(resourceSpec.CategoryId)); // Bind it to the local scope of the reservation expression
                 }
             } 
-            else { // r case, lookup in current scope, ensure its a Resource Type
-                if(reserveScope.Lookup(resourceSpec.Identifier) is not ResourceT) { // only resources may be declared in a reservation context
+            else { // Case where a specific resource is given i.e. losing the 'a rc' from [a rc ident], leaving only 'ident'
+                if(reserveScope.Lookup(resourceSpec.Identifier) is not ResourceT) { // needs to be of type resource
                     errors.Add($"Wrong Type '{resourceSpec.Identifier}'");
                     isWellTyped = false; // doesnt break given future errors still should be logged
                 }
