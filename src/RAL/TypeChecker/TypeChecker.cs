@@ -1,7 +1,4 @@
-using System.Reflection.Metadata;
-using System.Reflection.Metadata.Ecma335;
 using RAL.AST;
-using RAL.Interpreter;
 namespace RAL.TC;
 
 class TypeChecker {
@@ -11,14 +8,14 @@ class TypeChecker {
     //Since un-bound variables throw exceptions, return value is not nullable. All other cases return types
     private TypeT ExpType(Exp exp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) =>
         exp switch {
-            BoolV => new BoolT(),
-            StringV => new StringT(),
-            NumberV => new NumberT(),
-            DateTimeV => new DateTimeT(),
+            BoolV     => new BoolT(),
+            StringV   => new StringT(),
+            NumberV   => new NumberT(),
+            DateTimeV => new DateTimeT(),     
             DurationV => new DurationT(),
 
             Reference r when r.PropertyId == null => envV.Lookup(r.VariableId),
-            Reference r => envR.LookupField(r.VariableId, r.PropertyId),
+            Reference r => envR.LookupField(r.VariableId, r.PropertyId), // 'PropertyId' can never be null given the above check
 
             Assignment a => HandleAssignment(a, envV, envC, envH, envT, envR),
 
@@ -26,122 +23,125 @@ class TypeChecker {
 
             UnaryOperation u => HandleUnary(u, envV, envC, envH, envT, envR),
 
-            // new scope environment? for query
             Reserve r when QueryIsWellTyped(r.Query, envV, envC, envH, envT, envR) => new ReservationT(),
 
             Reschedule r => HandleReschedule(r, envV, envC, envH, envT, envR),
 
-            TemplateCall tc => HandleTemplateCall(tc, envV, envC, envH, envT, envR),
-
-            _ => throw new Exception("Unknown type.") // should never happen
+            _ => throw new Exception("Unknown expression.") // should never happen
         };
 
 
     private void StmtType(Stmt stmt, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         switch(stmt) {
-            case Composite cmp: {
-                if(cmp.Stmt1 != null) StmtType(cmp.Stmt1, envV, envC, envH, envT, envR);
-                if(cmp.Stmt2 != null) StmtType(cmp.Stmt2, envV, envC, envH, envT, envR);
-                break;     
-            }
+            case Composite cmp: handleComposite(cmp, envV, envC, envH, envT, envR); break;
 
-            case VarDecl decl: {
-                switch(decl.TypeT) {
-                    case ResourceT r: if(!envC.C.Contains(r.Category)) throw new Exception($"Use of undeclared category '{r.Category}'."); break;
-                    default: break;  
-                }       
-                envV.Bind(decl.Identifier, decl.TypeT); // still binds even if types dont match; is a problem
-                break;
-            }
+            case VarDecl decl: handleVarDecl(decl, envV, envC); break;
 
-            case ResourceDecl rd: { // WIP
-                if(rd.Properties != null) {
-                    
-                }
-                break;
-            }
-        
-            case CategoryDecl cd: {
-                if(envC.C.Contains(cd.CategoryId)) errors.Add($"Category '{cd.CategoryId}' has already been declared.");
-                envC.C.Add(cd.CategoryId);
-                if(cd.ParentId != null) {
-                    if(!envC.C.Contains(cd.ParentId)) throw new Exception($"Use of undeclared category '{cd.ParentId}'.");
-                    if(cd.CategoryId == cd.ParentId) throw new Exception($"A category may not relate to itself");
-                    envH.H.Add(cd.CategoryId, cd.ParentId);        
-                }
-                break;
-            }
+            case CategoryDecl cd: handleCategoryDecl(cd, envC, envH); break;
 
-            case Move mv: {
-                switch(envV.Lookup(mv.ResourceId, out TypeT type)) { 
-                    case ResourceT: {
-                        if(!envC.C.Contains(mv.CategoryId)) throw new Exception($"Use of undeclared category '{mv.CategoryId}'.");
-                        envV.ChangeCategory(mv.ResourceId, new ResourceT(mv.CategoryId)); break;          
-                    }
-                    default: {
-                        errors.Add($"Expected type 'Resource' got '{type}'"); // type --> string conversion unsure
-                        break;           
-                    }
-                }
-                break;       
-            }
+            case Move mv: handleMove(mv, envV, envC); break; 
 
-            case Cancel c: {
-                TypeT type = ExpType(c.Reservation, envV, envC, envH, envT, envR);
-                switch(type) { 
-                    case ReservationT: break;
-                    default: errors.Add($"Expected type 'Reservation' got: {type}."); break;  
-                }
-                break;
-            }
+            case Cancel c: handleCancel(c, envV, envC, envH, envT, envR); break;
 
-            case If i: {
-                TypeT type = ExpType(i.Condition, envV, envC, envH, envT, envR);
-                switch(type) {
-                    case BoolT: break;
-                    default: errors.Add($"If statement expects condition of type 'bool' got '{type}'"); break;      
-                }
-                if(i.ThenBody != null) StmtType(i.ThenBody, envV.NewScope(), envC, envH, envT, envR);        
-                if(i.ElseBody != null) StmtType(i.ElseBody, envV.NewScope(), envC, envH, envT, envR);
-                break;
-            }
+            case If i: handleIf(i, envV, envC, envH, envT, envR); break;
 
-            case TemplateDecl tmplDecl: {
-                EnvV tmplScope = envV.NewScope();
-                if(tmplDecl.ParamList != null) {
-                    List<TypeT> paramTypes = new();
-                    foreach(VarDecl param in tmplDecl.ParamList) {
-                        paramTypes.Add(param.Type);
-                        tmplScope.Bind(param.Identifier, param.Type);
-                    }
-                    envT.Bind(tmplDecl.TemplateId, paramTypes);
-                }
-                if(tmplDecl.TemplateBody != null) StmtType(tmplDecl.TemplateBody, tmplScope, envC, envH, envT, envR);
-                break;
-            }
+            case TemplateDecl tmplDecl: handleTemplateDecl(tmplDecl, envV, envC, envH, envT, envR); break;
 
-            case ExpStmt: {
+            case TemplateCall tc: HandleTemplateCall(tc, envV, envC, envH, envT, envR); break;
 
-            }
+            case ExpStmt s: ExpType(s.Expression, envV, envC, envH, envT, envR); break; 
 
-            case Availability av: {
-                QueryIsWellTyped(av.Query, envV, envC, envH, envT, envR); break;
-            }
-
+            case Availability av: QueryIsWellTyped(av.Query, envV, envC, envH, envT, envR); break; // QueryIsWellTyped adds errors itself, no need to check in case as well
+            
+            case ResourceDecl rd: HandleResourceDecl(rd, envV, envC, envH, envT, envR); break;
+            
+            default: throw new Exception("Unknown statement."); // should never happen
         }
     }
-    
-    private TypeT HandleAssignment(Assignment a, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR)
-    {
-        TypeT varType = envV.Lookup(a.VariableId);
-        
-        if (varType is ResourceT)
-            errors.Add($"Assignment to resources not allowed");
-    
-        TypeT expType = ExpType(a.Value, envV, envC, envH, envT, envR);
 
-        if(expType != varType) 
-            errors.Add($"Variable ${a.VariableId} expected type ${varType} but got ${expType}.");
+    private void HandleFieldDecl(ResourceDecl resDecl, VarDecl varDecl, EnvR envR) {
+        if (varDecl.Type is ResourceT || varDecl.Type is ReservationT) {
+            errors.Add("Type not allowed");
+        } else {
+            envR.BindField(resDecl.Identifier, varDecl.Identifier, varDecl.Type);
+        }
+    }
+
+    private void HandleResourceDecl(ResourceDecl resDecl, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        if (resDecl.PropertyList == null) return; // impossible to be illtyped if not present
+
+        foreach (Stmt stmt in resDecl.PropertyList) { // loop over fields
+            switch (stmt) {
+                case VarDecl varDecl: { // Field decl without assignment
+                    HandleFieldDecl(resDecl, varDecl, envR);
+                    break;
+                }
+
+                case Composite { // Field decl with assignment
+                    Stmt1: VarDecl varDecl, // guaranteed to be VarDecl
+                    Stmt2: ExpStmt exp      // guaranteed to be ExpStmt
+                }:  
+                    HandleFieldDecl(resDecl, varDecl, envR);
+
+                    TypeT expType = ExpType(exp.Expression, envV, envC, envH, envT, envR);
+                    if (varDecl.Type != expType) errors.Add($"Variable {varDecl.Identifier} expected type '{varDecl.Type}' got '{expType}'");
+
+                    break;
+            }
+        }
+    }
+
+    private void handleComposite(Composite cmp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        if(cmp.Stmt1 != null) StmtType(cmp.Stmt1, envV, envC, envH, envT, envR); // newScope ??
+        if(cmp.Stmt2 != null) StmtType(cmp.Stmt2, envV, envC, envH, envT, envR); // newScope ??
+    }
+
+    private void handleVarDecl(VarDecl decl, EnvV envV, EnvC envC) {
+        switch(decl.Type) {
+            case ResourceT r: if(!envC.C.Contains(r.Category)) throw new Exception($"Use of undeclared category '{r.ToString()}'."); break;
+            default: break;  
+        }       
+        envV.Bind(decl.Identifier, decl.Type);
+    }
+
+    private void handleMove(Move move, EnvV envV, EnvC envC) {
+        TypeT type;
+        switch(type = envV.Lookup(move.ResourceId)) { 
+            case ResourceT: {
+                if(!envC.C.Contains(move.CategoryId)) throw new Exception($"Use of undeclared category '{move.CategoryId}'.");
+                envV.ChangeCategory(move.ResourceId, new ResourceT(move.CategoryId)); break;          
+            }
+            default: {
+                errors.Add($"Expected type 'Resource' got '{type.ToString()}'");
+                break;
+            }
+        }
+    }
+
+    private void handleCancel(Cancel cancel, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        TypeT type = ExpType(cancel.Reservation, envV, envC, envH, envT, envR);
+        switch(type) { 
+            case ReservationT: break;
+            default: errors.Add($"Expected type 'Reservation' got: {type.ToString()}."); break;  
+        }
+    }
+
+    private void handleIf(If i, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        TypeT type = ExpType(i.Condition, envV, envC, envH, envT, envR);
+        switch(type) { 
+            case BoolT: break;
+            default: errors.Add($"If statement expects condition of type 'bool' got '{type.ToString()}'"); break;      
+        }
+        if(i.ThenBody != null) StmtType(i.ThenBody, envV.NewScope(), envC, envH, envT, envR);        
+        if(i.ElseBody != null) StmtType(i.ElseBody, envV.NewScope(), envC, envH, envT, envR);
+    }
+    
+    private TypeT HandleAssignment(Assignment assign, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        TypeT varType = envV.Lookup(assign.VariableId);
+        TypeT expType = ExpType(assign.Value, envV, envC, envH, envT, envR);
+        
+        if (varType is ResourceT) errors.Add($"Expression assignment to resources not allowed");
+        if(expType != varType) errors.Add($"Variable ${assign.VariableId} expected type ${varType.ToString()} but got ${expType.ToString()}.");
 
         return varType; 
     }
@@ -155,68 +155,58 @@ class TypeChecker {
         return exp.Operator switch
         {
             BinaryOperator.ADD or 
-            BinaryOperator.SUB => (left, right) switch
-            {
-                (NumberT, NumberT)     => new NumberT(), // num + num
+            BinaryOperator.SUB => (left, right) switch {
+                (NumberT, NumberT)     => new NumberT(),   // num + num
                 (DateTimeT, DurationT) => new DateTimeT(), // dt + dur
-                _ => Error(exp, left, right, operatorAsString)
+                _  => Error(exp, left, right, operatorAsString, new NumberT()) // assume user wanted number; terribleness
             },
 
 
             BinaryOperator.MUL or 
-            BinaryOperator.DIV => (left, right) switch
-            {
+            BinaryOperator.DIV => (left, right) switch {
                 (NumberT, NumberT) => new NumberT(), // num */ num
-                _ => Error(exp, left, right, operatorAsString)
+                _  => Error(exp, left, right, operatorAsString, new NumberT())
             },
 
-            BinaryOperator.LT   or 
-            BinaryOperator.GT   or 
-            BinaryOperator.LTEQ or 
-            BinaryOperator.GTEQ => (left, right) switch
-            {
+            BinaryOperator.LT   or
+            BinaryOperator.GT   or
+            BinaryOperator.LTEQ or
+            BinaryOperator.GTEQ => (left, right) switch {
                 (NumberT, NumberT) => new BoolT(),
-                _ => Error(exp, left, right, operatorAsString)
+                _ => Error(exp, left, right, operatorAsString, new BoolT())
             },
 
-            // neither are allowed for nonprimitive types
             BinaryOperator.EQ or 
-            BinaryOperator.NEQ => (left, right) switch
-            {
+            BinaryOperator.NEQ => (left, right) switch {
                 (StringT, StringT) => new BoolT(),
-                (BoolT, BoolT)     => new BoolT(),
+                (BoolT, BoolT)     => new BoolT(), // (4 < 7) == (7 > 11 and "hello" == "world")
                 (NumberT, NumberT) => new BoolT(),
-                _ => Error(exp, left, right, operatorAsString)
+                _  => Error(exp, left, right, operatorAsString, new BoolT())
             },
 
-            BinaryOperator.OR or BinaryOperator.AND => (left, right) switch
-            {
-                (ReservationT, ReservationT) => new ReservationT(), // conditional reservation
-                (BoolT, BoolT)               => new BoolT(),
-                _ => Error(exp, left, right, operatorAsString)
+            BinaryOperator.OR or BinaryOperator.AND => (left, right) switch {
+                (ReservationT, ReservationT) => new ReservationT(), // reserve [...] and reserve [...]
+                (BoolT, BoolT)               => new BoolT(),        // 4 < 7 and 7 < 11
+                _ => Error(exp, left, right, operatorAsString, new ReservationT()) // assume user wanted reservation; terribleness
             },
 
-            BinaryOperator.SEQ => (left, right) switch 
-            {
+            BinaryOperator.SEQ => (left, right) switch {
                 (ReservationT, ReservationT) => new ReservationT(),
-                _ => Error(exp, left, right, operatorAsString)
+                _ => Error(exp, left, right, operatorAsString, new ReservationT())
             },
-            _ => throw new Exception("Unknown type.") // should never happen      
+            _ => throw new Exception("Unknown binary operator.") // should never happen      
         };
     }
 
-    private TypeT HandleUnary(UnaryOperation exp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) 
-    {
+    private TypeT HandleUnary(UnaryOperation exp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         TypeT operandType = ExpType(exp.Expression, envV, envC, envH, envT, envR);
         string operatorAsString = EnumToOp(exp.Operator);
-        return exp.Operator switch 
-        {
+        return exp.Operator switch {
             UnaryOperator.NOT when (operandType is BoolT) => new BoolT(),
-            UnaryOperator.NOT => Error("bool", operandType, operatorAsString),
-
+            UnaryOperator.NOT => Error("bool", operandType, operatorAsString, new BoolT()),
 
             UnaryOperator.NEG when (operandType is NumberT) => new NumberT(),
-            UnaryOperator.NEG => Error("number", operandType, operatorAsString),
+            UnaryOperator.NEG => Error("number", operandType, operatorAsString, new NumberT()),
 
             _ => throw new Exception("Unknown type.") // should never happen
         };
@@ -224,71 +214,51 @@ class TypeChecker {
   
     private bool QueryIsWellTyped(QueryData queryData, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
 
-        if(!ResourceSpecIsWellTyped(queryData.ResourceSpecs, envV, envC, envH, envT, envR)) return false;
+        bool isWellTyped = true;
 
-        if(!TimeSpecIsWellTyped(queryData.Interval, envV, envC, envH, envT, envR)) return false;
+        // make completely new (seperate) scope? i.e. EnvV reserseScope = new(); [mixing a rc id with id?]. Mixing local properties with global?
+        EnvV reserveScope = envV.NewScope(); // Reservations allow for local declarations; create local scope
+        
+        if(!ResourceSpecIsWellTyped(queryData.ResourceSpecs, reserveScope, envC, envH, envT, envR)) isWellTyped = false; // doesnt return given future errors still should be logged
 
-        if(queryData.Condition != null) {
-            TypeT condType = ExpType(queryData.Condition, envV, envC, envH, envT, envR);
-            switch(condType) {
-                case BoolT: break;
-                default: {
-                    errors.Add($"Condition expected type 'bool' got '{condType}'"); 
-                    return false;  
-                }
-            }
-        }
+        if(!TimeSpecIsWellTyped(queryData.Interval, reserveScope, envC, envH, envT, envR))          isWellTyped = false; // doesnt return given future errors still should be logged
 
-        if(queryData.Recurrence != null) {
-            TypeT everyType = ExpType(queryData.Recurrence.EveryDuration, envV, envC, envH, envT, envR);
-            TypeT endType = ExpType(queryData.Recurrence.EndMarker, envV, envC, envH, envT, envR);
-            switch(everyType, endType) {
-                case(DurationT, DateTimeT): break; // needs way to distinguish between for/until
-                case(DurationT, DurationT): break;
-                default: {
-                    errors.Add($"Types '{everyType}' and '{endType}' incompatible for recurrence.");
-                    return false;            
-                }        
-            }
-        }
-        return true;
+        if(!ConditionIsWellTyped(queryData.Condition, reserveScope, envC, envH, envT, envR))        isWellTyped = false; // doesnt return given future errors still should be logged 
+
+        if(!RecurrenceIsWellTyped(queryData.Recurrence, reserveScope, envC, envH, envT, envR))      isWellTyped = false; // doesnt return given future errors still should be logged
+
+        return isWellTyped;
     }
 
     //Check all resource specifications: a*rc ident | r
     private bool ResourceSpecIsWellTyped(List<ResourceSpec> resourceSpecs, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
-        //new environment used only if a local variable binding is encountered
-        EnvV reserveScope = envV.NewScope();
-        
+      
         bool isWellTyped = true;
         
-        foreach(ResourceSpec resourceSpec in resourceSpecs) {
+        foreach(ResourceSpec resourceSpec in resourceSpecs) { // loop over the [[a rc ident] and [a rc ident] and [a rc ident] and ...]
             
-            // a rc [ident]
-            if(resourceSpec.Quantity != null) {
-                TypeT quantityType = ExpType(resourceSpec.Quantity, envV, envC, envH, envT, envR);
+            if(resourceSpec.Quantity != null) { // The 'a' in [a rc ident] is not required, i.e. if the user simply puts an already declared 'ident'
+                TypeT quantityType = ExpType(resourceSpec.Quantity, envV, envC, envH, envT, envR); // evaluate 'a'
                 
-                if (quantityType is not NumberT)
-                {
-                    errors.Add($"Expected type 'number' got '{quantityType}'");
-            
-                    isWellTyped = false;
+                if (quantityType is not NumberT) { // make sure it evaluates to a number
+                    errors.Add($"Expected type 'number' got '{quantityType.ToString()}'");
+                    isWellTyped = false; // doesnt break given future errors still should be logged
                 }
 
-                //No need to check (resourceSpec.CategoryId != null) given quantity is not null, would be rejected by parser
+                //No need to check (resourceSpec.CategoryId != null) given quantity is not null; would be rejected by parser. 'rc ident' not allowed, must be of form 'a rc' or 'a rc ident'
                 if(!envC.C.Contains(resourceSpec.CategoryId)) {
                     errors.Add($"Use of undeclared category '{resourceSpec.CategoryId}'");
-                    isWellTyped = false;
+                    isWellTyped = false; // doesnt break given future errors still should be logged
                 }
 
-                //hvis id findes så bind til nyt scope
-                if(resourceSpec.Identifier != null) {
-                    reserveScope.Bind(resourceSpec.Identifier, new ResourceT(resourceSpec.CategoryId));
+                if(resourceSpec.Identifier != null) { // The 'ident' in [a rc ident] refers to a new variable here
+                    envV.Bind(resourceSpec.Identifier, new ResourceT(resourceSpec.CategoryId)); // Bind it to the local scope of the reservation expression
                 }
             } 
-            else {// r case, lookup in current scope, ensure its a Resource Type
-                if(envV.Lookup(resourceSpec.Identifier) is not ResourceT) {
-                    errors.Add($"Wrong Type '{resourceSpec.Identifier}'");
-                    isWellTyped = false;
+            else { // Case where a specific resource is given i.e. losing the 'a rc' from [a rc ident], leaving only 'ident'
+                if(envV.Lookup(resourceSpec.Identifier) is not ResourceT) { // needs to be of type resource
+                    errors.Add($"Expected type 'resource' got '{resourceSpec.Identifier}'");
+                    isWellTyped = false; // doesnt break given future errors still should be logged
                 }
             }            
         }
@@ -299,42 +269,96 @@ class TypeChecker {
         TypeT toType = ExpType(timeSpec.EndMarker, envV, envC, envH, envT, envR);
         
         return (fromType, toType) switch {
-            (DateTimeT, DateTimeT) => true, // needs way to distinguish between to/for
-            (DateTimeT, DurationT) => true,
+            (DateTimeT, DateTimeT) => true, // dt to dt
+            (DateTimeT, DurationT) => true, // dt for dur
+            _  => Error($"Types {fromType.ToString()} and {toType.ToString()} incompatible with interval expression")
+        };
+    }
 
-            _ => false // TODO: errors.Add($"Types {fromType} and {toType} incompatible with interval expression");
+    private bool ConditionIsWellTyped(Exp? condition, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        if(condition == null) return true; // cannot be illtyped if not present
+
+        TypeT condType = ExpType(condition, envV, envC, envH, envT, envR);
+        return condType switch {
+            BoolT => true,
+            _  => Error($"Condition expected type 'bool' got '{condType.ToString()}'")
+        };
+    }
+
+    private bool RecurrenceIsWellTyped(RecurrenceSpec? recurrence, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        if(recurrence == null) return true; // cannot be illtyped if not present
+
+        TypeT everyType = ExpType(recurrence.EveryDuration, envV, envC, envH, envT, envR);
+        TypeT endType = ExpType(recurrence.EndMarker, envV, envC, envH, envT, envR);
+        return (everyType, endType) switch {
+            (DurationT, DateTimeT) => true, // needs way to distinguish between for/until
+            (DurationT, DurationT) => true,
+            _  => Error($"Types '{everyType.ToString()}' and '{endType.ToString()}' incompatible for recurrence.")       
         };
     }
     
 
     private TypeT HandleReschedule(Reschedule r, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
-        TimeSpecIsWellTyped(r.NewTimeInterval, envV, envC, envH, envT, envR);
+        TimeSpecIsWellTyped(r.NewTimeInterval, envV, envC, envH, envT, envR); // Simply checks for errors in the [dt to dt / for dur]. Return value is discarded
 
         TypeT expType = ExpType(r.Reservation, envV, envC, envH, envT, envR);
         
         return expType switch {
             ReservationT => new ReservationT(),
-            _ => errors.Add($"Expected type 'reservation' got '{expType}'")       
+            _ => Error("reschedule", expType, "reservation", new ReservationT())
         };
     }
-    private TypeT HandleTemplateCall(TemplateCall tc, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) 
-    {
-        List<TypeT> formalParamsTypes = envT.Lookup(tc.TemplateId);
+    private void HandleTemplateCall(TemplateCall tc, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        List<TypeT> formalParamTypes = envT.Lookup(tc.TemplateId);
 
-        if(formalParamsTypes != null && tc.ArgList != null) {
+        if(formalParamTypes == null && tc.ArgList == null) return; // both lists are empty; illtyping is impossible
 
-            if(formalParamsTypes.Count != tc.ArgList.Count) 
-                errors.Add($"{tc.TemplateId} expected {formalParamsTypes.Count} arguments got {tc.ArgList.Count}");
+        if(formalParamTypes != null && tc.ArgList == null || 
+           formalParamTypes == null && tc.ArgList != null) { // XOR?
+            errors.Add("Number of expected arguments don't match actual.");
+            return; // return to avoid null dereference exceptions
+        }
 
-            for (int i = 0; i < formalParamsTypes.Count; i++) {
-                TypeT expected = formalParamsTypes[i];
-                TypeT actual = ExpType(tc.ArgList[i], envV, envC, envH, envT, envR);
-                
-                
-                //if resource, check category
-                if (!envH.IsSubtype(actual, expected)) 
-                    throw new Exception($"Argument {i + 1} of template '{tc.TemplateId}' expected {expected} but got {actual}.");
-            }
+        if(formalParamTypes.Count != tc.ArgList.Count) // argument count must match: false-positives could arise otherwise
+            errors.Add($"{tc.TemplateId} expected {formalParamTypes.Count} arguments got {tc.ArgList.Count}");
+
+        for (int i = 0; i < formalParamTypes.Count; i++) { // could loop over formal or actual parameter count: they are interchangable at this point
+            TypeT expected = formalParamTypes[i];
+            TypeT actual = ExpType(tc.ArgList[i], envV, envC, envH, envT, envR);
+            
+            if(actual is ResourceT a && expected is ResourceT e && !envH.IsSubtype(a, e)) // if both are resources but not subtypes: produce an error
+                    errors.Add($"Argument {i + 1} of template '{tc.TemplateId}' of type {actual.ToString()} is not compatible with {expected.ToString()}.");
+
+            else if(expected != actual) // if both not resources: check simple equality
+                    errors.Add($"Argument {i + 1} of template '{tc.TemplateId}' expected {expected.ToString()} got {actual.ToString()}."); 
+        }
+    }
+    
+    private void handleTemplateDecl(TemplateDecl tmplDecl, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        if(tmplDecl.ParamList == null) return; // possible problems in template lookup due to null pointer dereference?
+
+        EnvV tmplScope = envV.NewScope();
+        List<TypeT> paramTypes = new();
+
+        foreach(VarDecl param in tmplDecl.ParamList) {
+            paramTypes.Add(param.Type); // extract types from param list and add to template environment
+            tmplScope.Bind(param.Identifier, param.Type); // make formal parameters accessible (only) in template body
+        }
+        envT.Bind(tmplDecl.TemplateId, paramTypes); // bind template id to formal param types
+
+        if(tmplDecl.TemplateBody != null) 
+            StmtType(tmplDecl.TemplateBody, tmplScope, envC, envH, envT, envR); // type check body
+    }
+
+    private void handleCategoryDecl(CategoryDecl cd, EnvC envC, EnvH envH) {
+        if(envC.C.Contains(cd.CategoryId))
+            errors.Add($"Category '{cd.CategoryId}' has already been declared.");
+
+        envC.C.Add(cd.CategoryId);
+        if(cd.ParentId != null) { // checks 'is a id' part of [category id is a id]
+            if(!envC.C.Contains(cd.ParentId)) throw new Exception($"Use of undeclared category '{cd.ParentId}'.");
+            if(cd.CategoryId == cd.ParentId) throw new Exception($"A category may not relate to itself"); // necessary given the category gets added to the environment prior to adding to hierarchy
+            envH.H.Add(new ResourceT(cd.CategoryId), new ResourceT(cd.ParentId)); // establish relation
         }
     }
 
@@ -356,26 +380,25 @@ class TypeChecker {
         "";
     }
 
-      private string EnumToOp(UnaryOperator op) {
+    private string EnumToOp(UnaryOperator op) {
         return
         op == UnaryOperator.NOT  ? "not"  :
         op == UnaryOperator.NEG  ? "-"  :
         "";
     }
 
-
-    private void Error(BinaryOperation b, TypeT left, TypeT right, string op)
-    {
-        errors.Add($"Line {b.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for '{op}'");
+    // the below three error functions are simply to circumvent switch expression limitations of not being able to add statements
+    private bool Error(string msg) {
+        errors.Add(msg);
+        return false;
+    }
+    private TypeT Error(BinaryOperation b, TypeT left, TypeT right, string op, TypeT expected) {
+        errors.Add($"Line {b.LeftExpression.LineNumber}: Operand types '{left.ToString()}' and '{right.ToString()}' incompatible for '{op}'");
+        return expected;
     }
 
-    private void Error(string expectedType, TypeT actualType, string op)
-    {
-        errors.Add($"Operator '{op}' expected type '{expectedType}', but got '{actualType}'.");
+    private TypeT Error(string expectedType, TypeT actualType, string op, TypeT expected) {
+        errors.Add($"Operator '{op}' expected type '{expectedType}', but got '{actualType.ToString()}'.");
+        return expected;
     }
 }
-
-
-// STATEMENTS:
-// expStmt          ??
-// resourceDecl     ??
