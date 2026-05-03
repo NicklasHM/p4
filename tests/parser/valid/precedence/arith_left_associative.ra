@@ -1,6 +1,6 @@
 category Room;
 category DoubleRoom is a Room;
 
-DoubleRoom room1 { number floor; };
+DoubleRoom room1 { number floor; }
 
 check DoubleRoom from 15/03-2026 14:00 to 17/03-2026 12:00 where floor == 10 - 3 - 2;
