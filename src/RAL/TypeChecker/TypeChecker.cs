@@ -33,19 +33,19 @@ class TypeChecker {
 
     private void StmtType(Stmt stmt, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         switch(stmt) {
-            case Composite cmp: handleComposite(cmp, envV, envC, envH, envT, envR); break;
+            case Composite cmp: HandleComposite(cmp, envV, envC, envH, envT, envR); break;
 
-            case VarDecl decl: handleVarDecl(decl, envV, envC); break;
+            case VarDecl decl: HandleVarDecl(decl, envV, envC); break;
 
-            case CategoryDecl cd: handleCategoryDecl(cd, envC, envH); break;
+            case CategoryDecl cd: HandleCategoryDecl(cd, envC, envH); break;
 
-            case Move mv: handleMove(mv, envV, envC); break; 
+            case Move mv: HandleMove(mv, envV, envC); break; 
 
-            case Cancel c: handleCancel(c, envV, envC, envH, envT, envR); break;
+            case Cancel c: HandleCancel(c, envV, envC, envH, envT, envR); break;
 
-            case If i: handleIf(i, envV, envC, envH, envT, envR); break;
+            case If i: HandleIf(i, envV, envC, envH, envT, envR); break;
 
-            case TemplateDecl tmplDecl: handleTemplateDecl(tmplDecl, envV, envC, envH, envT, envR); break;
+            case TemplateDecl tmplDecl: HandleTemplateDecl(tmplDecl, envV, envC, envH, envT, envR); break;
 
             case TemplateCall tc: HandleTemplateCall(tc, envV, envC, envH, envT, envR); break;
 
@@ -68,6 +68,15 @@ class TypeChecker {
     }
 
     private void HandleResourceDecl(ResourceDecl resDecl, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+        
+        if(resDecl.Type is not ResourceT r) 
+            errors.Add("Wrong type");
+
+        else if(!envC.CategoryIsDeclared(r.Category))
+            errors.Add($"Use of undeclared category");
+        
+        envV.Bind(resDecl.Identifier, new ResourceT(resDecl.Identifier)); // bind resource
+
         if (resDecl.PropertyList == null) return; // impossible to be illtyped if not present
 
         foreach (Stmt stmt in resDecl.PropertyList) { // loop over fields
@@ -91,47 +100,44 @@ class TypeChecker {
         }
     }
 
-    private void handleComposite(Composite cmp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+    private void HandleComposite(Composite cmp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         if(cmp.Stmt1 != null) StmtType(cmp.Stmt1, envV, envC, envH, envT, envR); // newScope ??
         if(cmp.Stmt2 != null) StmtType(cmp.Stmt2, envV, envC, envH, envT, envR); // newScope ??
     }
 
-    private void handleVarDecl(VarDecl decl, EnvV envV, EnvC envC) {
-        switch(decl.Type) {
-            case ResourceT r: if(!envC.C.Contains(r.Category)) throw new Exception($"Use of undeclared category '{r.ToString()}'."); break;
-            default: break;  
-        }       
+    private void HandleVarDecl(VarDecl decl, EnvV envV, EnvC envC) {
+        if(decl.Type is ResourceT r && !envC.CategoryIsDeclared(r.Category))
+            throw new Exception($"Use of undeclared category '{r.ToString()}'.");
+   
         envV.Bind(decl.Identifier, decl.Type);
     }
 
-    private void handleMove(Move move, EnvV envV, EnvC envC) {
-        TypeT type;
-        switch(type = envV.Lookup(move.ResourceId)) { 
-            case ResourceT: {
-                if(!envC.C.Contains(move.CategoryId)) throw new Exception($"Use of undeclared category '{move.CategoryId}'.");
-                envV.ChangeCategory(move.ResourceId, new ResourceT(move.CategoryId)); break;          
-            }
-            default: {
-                errors.Add($"Expected type 'Resource' got '{type.ToString()}'");
-                break;
-            }
-        }
+    private void HandleMove(Move move, EnvV envV, EnvC envC) {
+
+        // Ensure id to move maps to a resource. V(r) = Resource. 
+        TypeT type = envV.Lookup(move.ResourceId);
+        if(type is ResourceT) {
+
+            //Ensure id of category maps to a category
+            if(!envC.CategoryIsDeclared(move.CategoryId)) 
+                throw new Exception($"Use of undeclared category '{move.CategoryId}'.");
+            
+            //
+            envV.ChangeCategory(move.ResourceId, new ResourceT(move.CategoryId));
+        } else 
+            errors.Add($"Expected type 'Resource' got '{type.ToString()}'");
     }
 
-    private void handleCancel(Cancel cancel, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+    private void HandleCancel(Cancel cancel, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         TypeT type = ExpType(cancel.Reservation, envV, envC, envH, envT, envR);
-        switch(type) { 
-            case ReservationT: break;
-            default: errors.Add($"Expected type 'Reservation' got: {type.ToString()}."); break;  
-        }
+        if(type is not ReservationT) errors.Add($"Expected type 'Reservation' got: {type.ToString()}.");
     }
 
-    private void handleIf(If i, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+    private void HandleIf(If i, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         TypeT type = ExpType(i.Condition, envV, envC, envH, envT, envR);
-        switch(type) { 
-            case BoolT: break;
-            default: errors.Add($"If statement expects condition of type 'bool' got '{type.ToString()}'"); break;      
-        }
+
+        if(type is not BoolT) errors.Add($"If statement expects condition of type 'bool' got '{type.ToString()}'");
+
         if(i.ThenBody != null) StmtType(i.ThenBody, envV.NewScope(), envC, envH, envT, envR);        
         if(i.ElseBody != null) StmtType(i.ElseBody, envV.NewScope(), envC, envH, envT, envR);
     }
@@ -194,6 +200,7 @@ class TypeChecker {
                 (ReservationT, ReservationT) => new ReservationT(),
                 _ => Error(exp, left, right, operatorAsString, new ReservationT())
             },
+
             _ => throw new Exception("Unknown binary operator.") // should never happen      
         };
     }
@@ -216,7 +223,6 @@ class TypeChecker {
 
         bool isWellTyped = true;
 
-        // make completely new (seperate) scope? i.e. EnvV reserseScope = new(); [mixing a rc id with id?]. Mixing local properties with global?
         EnvV reserveScope = envV.NewScope(); // Reservations allow for local declarations; create local scope
         
         if(!ResourceSpecIsWellTyped(queryData.ResourceSpecs, reserveScope, envC, envH, envT, envR)) isWellTyped = false; // doesnt return given future errors still should be logged
@@ -246,7 +252,7 @@ class TypeChecker {
                 }
 
                 //No need to check (resourceSpec.CategoryId != null) given quantity is not null; would be rejected by parser. 'rc ident' not allowed, must be of form 'a rc' or 'a rc ident'
-                if(!envC.C.Contains(resourceSpec.CategoryId)) {
+                if(!envC.CategoryIsDeclared(resourceSpec.CategoryId)) {
                     errors.Add($"Use of undeclared category '{resourceSpec.CategoryId}'");
                     isWellTyped = false; // doesnt break given future errors still should be logged
                 }
@@ -334,7 +340,7 @@ class TypeChecker {
         }
     }
     
-    private void handleTemplateDecl(TemplateDecl tmplDecl, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+    private void HandleTemplateDecl(TemplateDecl tmplDecl, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         if(tmplDecl.ParamList == null) return; // possible problems in template lookup due to null pointer dereference?
 
         EnvV tmplScope = envV.NewScope();
@@ -347,18 +353,25 @@ class TypeChecker {
         envT.Bind(tmplDecl.TemplateId, paramTypes); // bind template id to formal param types
 
         if(tmplDecl.TemplateBody != null) 
-            StmtType(tmplDecl.TemplateBody, tmplScope, envC, envH, envT, envR); // type check body
+            StmtType(tmplDecl.TemplateBody, tmplScope, envC, envH, envT, envR); // type check body. 
     }
-
-    private void handleCategoryDecl(CategoryDecl cd, EnvC envC, EnvH envH) {
-        if(envC.C.Contains(cd.CategoryId))
+    private void HandleCategoryDecl(CategoryDecl cd, EnvC envC, EnvH envH) {
+        //Ensure id is not already in the set of categories
+        if(envC.CategoryIsDeclared(cd.CategoryId))
             errors.Add($"Category '{cd.CategoryId}' has already been declared.");
 
-        envC.C.Add(cd.CategoryId);
-        if(cd.ParentId != null) { // checks 'is a id' part of [category id is a id]
-            if(!envC.C.Contains(cd.ParentId)) throw new Exception($"Use of undeclared category '{cd.ParentId}'.");
-            if(cd.CategoryId == cd.ParentId) throw new Exception($"A category may not relate to itself"); // necessary given the category gets added to the environment prior to adding to hierarchy
-            envH.H.Add(new ResourceT(cd.CategoryId), new ResourceT(cd.ParentId)); // establish relation
+        //Add the new category to the set
+        envC.AddCategory(cd.CategoryId);
+
+        //Handle relation to parent if any - 'is a id' part of [category id is a id]
+        if(cd.ParentId != null) { 
+            
+            //Ensure parent is in the set of categories
+            if(!envC.CategoryIsDeclared(cd.ParentId)) 
+                throw new Exception($"Use of undeclared category '{cd.ParentId}'.");
+
+            //Delegate establishment of parent relation to hierarchy environment. Guards cyclic relations
+            envH.EstablishRelation(new ResourceT(cd.CategoryId), new ResourceT(cd.ParentId)); 
         }
     }
 

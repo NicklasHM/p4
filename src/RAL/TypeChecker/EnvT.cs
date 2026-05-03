@@ -1,8 +1,9 @@
 namespace RAL.TC;
 using RAL.AST;
 
+/// <summary> Environment for templates /// </summary>
 public class EnvT {
-    public readonly Dictionary<string, List<TypeT>> T = new();
+    private readonly Dictionary<string, List<TypeT>> T = new();
 
     public void Bind(string var, List<TypeT> types) {
         if (T.ContainsKey(var)) {

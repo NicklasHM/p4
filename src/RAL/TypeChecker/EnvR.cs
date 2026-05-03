@@ -1,8 +1,9 @@
 namespace RAL.TC;
 using RAL.AST;
 
+/// <summary> Resource field Environment. (ResourceName, (FieldName, Type)) /// </summary>
 public class EnvR {
-    public readonly Dictionary<string, Dictionary<string, TypeT>> R = new();
+    private readonly Dictionary<string, Dictionary<string, TypeT>> R = new();
 
     public void BindField(string resource, string field, TypeT type) {
         if (!R.TryGetValue(resource, out var fields))
@@ -23,5 +24,4 @@ public class EnvR {
 
         throw new Exception($"Unknown field '{fieldName}' in resource '{resource}'.");
     }
-
 }
