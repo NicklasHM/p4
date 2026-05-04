@@ -36,6 +36,7 @@ class TypeChecker {
 
     public void StmtType(Stmt stmt, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         switch(stmt) {
+            case Skip: break;
             case Composite cmp: HandleComposite(cmp, envV, envC, envH, envT, envR); break;
 
             case VarDecl decl: HandleVarDecl(decl, envV, envC); break;
