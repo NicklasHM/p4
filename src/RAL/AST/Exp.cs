@@ -1,6 +1,6 @@
 namespace RAL.AST;
 
-abstract record class Exp(int LineNumber);
+public abstract record class Exp(int LineNumber);
 
 record class BoolV(int LineNumber, bool Value) : Exp(LineNumber);
 

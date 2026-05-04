@@ -44,4 +44,24 @@ public class EnvV {
     public bool IsLocal(string var) {
         return E.ContainsKey(var);
     }
+
+    public List<string> GetResourcesByCategory(string category) {
+        List<string> resources = new();
+        
+        // Check current scope
+        foreach (var kvp in E) {
+            // Warning: In your current HandleResourceDecl, you bind the ResourceId as the Category.
+            // Assuming 'Category' holds the actual category name:
+            if (kvp.Value is ResourceT resT && resT.Category == category) {
+                resources.Add(kvp.Key);
+            }
+        }
+
+        // Recursively check parent scopes
+        if (parent != null) {
+            resources.AddRange(parent.GetResourcesByCategory(category));
+        }
+
+        return resources.Distinct().ToList();
+    }
 }

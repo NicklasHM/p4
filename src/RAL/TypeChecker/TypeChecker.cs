@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using RAL.AST;
 namespace RAL.TC;
 
@@ -14,8 +15,9 @@ class TypeChecker {
             DateTimeV => new DateTimeT(),     
             DurationV => new DurationT(),
 
-            Reference r when r.PropertyId == null => envV.Lookup(r.VariableId),
-            Reference r => envR.LookupField(r.VariableId, r.PropertyId), // 'PropertyId' can never be null given the above check
+            Reference r when r.PropertyId == null => envV.Lookup(r.VariableId), //id cases
+            Reference r => HandlePropertyReference(r, envV, envR), 
+            //Reference r => envR.LookupField(r.VariableId, r.PropertyId), // id.id cases.'PropertyId' can never be null given the above check
 
             Assignment a => HandleAssignment(a, envV, envC, envH, envT, envR),
 
@@ -24,14 +26,15 @@ class TypeChecker {
             UnaryOperation u => HandleUnary(u, envV, envC, envH, envT, envR),
 
             Reserve r when QueryIsWellTyped(r.Query, envV, envC, envH, envT, envR) => new ReservationT(),
+            Reserve r  => new ReservationT(),
 
             Reschedule r => HandleReschedule(r, envV, envC, envH, envT, envR),
 
-            _ => throw new Exception("Unknown expression.") // should never happen
+            _ => throw new Exception($"Unknown {exp.LineNumber} expression.") // should never happen
         };
 
 
-    private void StmtType(Stmt stmt, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
+    public void StmtType(Stmt stmt, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         switch(stmt) {
             case Composite cmp: HandleComposite(cmp, envV, envC, envH, envT, envR); break;
 
@@ -75,7 +78,9 @@ class TypeChecker {
         else if(!envC.CategoryIsDeclared(r.Category))
             errors.Add($"Use of undeclared category");
         
-        envV.Bind(resDecl.Identifier, new ResourceT(resDecl.Identifier)); // bind resource
+        envV.Bind(resDecl.Identifier, resDecl.Type); // bind resource to variable environment
+
+        envR.RegisterResource(resDecl.Identifier); // Invariant: All resources must be registered in resource environment, important for property checking
 
         if (resDecl.PropertyList == null) return; // impossible to be illtyped if not present
 
@@ -152,6 +157,28 @@ class TypeChecker {
         return varType; 
     }
 
+    private TypeT HandlePropertyReference(Reference referenceNode, EnvV envV, EnvR envR)
+    {
+        // Ensure that the variable is a resource type. Only these should allow property access.
+                
+        TypeT varType = envV.Lookup(referenceNode.VariableId);
+ 
+        if (varType is not ResourceT resT) {
+            return Error($"Cannot access property '{referenceNode.PropertyId}' on non-resource '{referenceNode.VariableId}'.", new BoolT());
+        }
+
+        // Case 1: Declared resources. Upon declaration, reglardless of having fields, a resource is registered to envR.
+        if (envR.HasResource(referenceNode.VariableId)) {
+
+            // id.id cases.'PropertyId' can never be null given case from which this method is invoked. Handles cases 
+            return envR.LookupField(referenceNode.VariableId, referenceNode.PropertyId);
+        }
+
+        // Case 2: Does not exist in resource environment -> Bounded query variable. Find any resource of this category that has this field.
+        return LookupCategoryFieldType(resT.Category, referenceNode.PropertyId, envV, envR);
+    }
+    
+
     private TypeT HandleBinary(BinaryOperation exp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         
         TypeT left  = ExpType(exp.LeftExpression,  envV, envC, envH, envT, envR);
@@ -164,42 +191,36 @@ class TypeChecker {
             BinaryOperator.SUB => (left, right) switch {
                 (NumberT, NumberT)     => new NumberT(),   // num + num
                 (DateTimeT, DurationT) => new DateTimeT(), // dt + dur
-                _  => Error(exp, left, right, operatorAsString, new NumberT()) // assume user wanted number; terribleness
-            },
+                _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new NumberT())            },
 
 
             BinaryOperator.MUL or 
             BinaryOperator.DIV => (left, right) switch {
                 (NumberT, NumberT) => new NumberT(), // num */ num
-                _  => Error(exp, left, right, operatorAsString, new NumberT())
-            },
+                _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new NumberT())},
 
             BinaryOperator.LT   or
             BinaryOperator.GT   or
             BinaryOperator.LTEQ or
             BinaryOperator.GTEQ => (left, right) switch {
                 (NumberT, NumberT) => new BoolT(),
-                _ => Error(exp, left, right, operatorAsString, new BoolT())
-            },
+                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new BoolT())},
 
             BinaryOperator.EQ or 
             BinaryOperator.NEQ => (left, right) switch {
                 (StringT, StringT) => new BoolT(),
                 (BoolT, BoolT)     => new BoolT(), // (4 < 7) == (7 > 11 and "hello" == "world")
                 (NumberT, NumberT) => new BoolT(),
-                _  => Error(exp, left, right, operatorAsString, new BoolT())
-            },
+                _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new BoolT())},
 
             BinaryOperator.OR or BinaryOperator.AND => (left, right) switch {
                 (ReservationT, ReservationT) => new ReservationT(), // reserve [...] and reserve [...]
                 (BoolT, BoolT)               => new BoolT(),        // 4 < 7 and 7 < 11
-                _ => Error(exp, left, right, operatorAsString, new ReservationT()) // assume user wanted reservation; terribleness
-            },
+                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new ReservationT())},
 
             BinaryOperator.SEQ => (left, right) switch {
                 (ReservationT, ReservationT) => new ReservationT(),
-                _ => Error(exp, left, right, operatorAsString, new ReservationT())
-            },
+                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new ReservationT())},
 
             _ => throw new Exception("Unknown binary operator.") // should never happen      
         };
@@ -210,11 +231,10 @@ class TypeChecker {
         string operatorAsString = EnumToOp(exp.Operator);
         return exp.Operator switch {
             UnaryOperator.NOT when (operandType is BoolT) => new BoolT(),
-            UnaryOperator.NOT => Error("bool", operandType, operatorAsString, new BoolT()),
-
+            UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected bool but got '{operandType}'", new BoolT()),
             UnaryOperator.NEG when (operandType is NumberT) => new NumberT(),
-            UnaryOperator.NEG => Error("number", operandType, operatorAsString, new NumberT()),
 
+            UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected number but got '{operandType}'", new NumberT()),
             _ => throw new Exception("Unknown type.") // should never happen
         };
     }
@@ -243,31 +263,41 @@ class TypeChecker {
         
         foreach(ResourceSpec resourceSpec in resourceSpecs) { // loop over the [[a rc ident] and [a rc ident] and [a rc ident] and ...]
             
-            if(resourceSpec.Quantity != null) { // The 'a' in [a rc ident] is not required, i.e. if the user simply puts an already declared 'ident'
-                TypeT quantityType = ExpType(resourceSpec.Quantity, envV, envC, envH, envT, envR); // evaluate 'a'
-                
-                if (quantityType is not NumberT) { // make sure it evaluates to a number
-                    errors.Add($"Expected type 'number' got '{quantityType.ToString()}'");
-                    isWellTyped = false; // doesnt break given future errors still should be logged
+            // "a rc" or "a rc id"
+            if (resourceSpec.Quantity != null && resourceSpec.CategoryId != null) {
+    
+                TypeT quantityType = ExpType(resourceSpec.Quantity, envV, envC, envH, envT, envR);
+
+                if (quantityType is not NumberT) {
+                    errors.Add($"Expected type 'number' got '{quantityType}");
+                    isWellTyped = false;
                 }
 
-                //No need to check (resourceSpec.CategoryId != null) given quantity is not null; would be rejected by parser. 'rc ident' not allowed, must be of form 'a rc' or 'a rc ident'
-                if(!envC.CategoryIsDeclared(resourceSpec.CategoryId)) {
+                if (!envC.CategoryIsDeclared(resourceSpec.CategoryId)) {
                     errors.Add($"Use of undeclared category '{resourceSpec.CategoryId}'");
-                    isWellTyped = false; // doesnt break given future errors still should be logged
+                    isWellTyped = false;
                 }
 
-                if(resourceSpec.Identifier != null) { // The 'ident' in [a rc ident] refers to a new variable here
-                    envV.Bind(resourceSpec.Identifier, new ResourceT(resourceSpec.CategoryId)); // Bind it to the local scope of the reservation expression
+                if (resourceSpec.Identifier != null) {
+                    envV.Bind(resourceSpec.Identifier, new ResourceT(resourceSpec.CategoryId));
                 }
-            } 
-            else { // Case where a specific resource is given i.e. losing the 'a rc' from [a rc ident], leaving only 'ident'
-                if(envV.Lookup(resourceSpec.Identifier) is not ResourceT) { // needs to be of type resource
+            }
+
+            // "id"
+            else if (resourceSpec.Identifier != null && resourceSpec.Quantity == null) {
+                if (envV.Lookup(resourceSpec.Identifier) is not ResourceT) {
                     errors.Add($"Expected type 'resource' got '{resourceSpec.Identifier}'");
-                    isWellTyped = false; // doesnt break given future errors still should be logged
+                    isWellTyped = false;
                 }
-            }            
+            }
+
+            else {
+                // invalid combination
+                errors.Add("Invalid resource specification");
+                isWellTyped = false;
+            }
         }
+
         return isWellTyped;
     }
     private bool TimeSpecIsWellTyped(TimeSpec timeSpec, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
@@ -311,7 +341,7 @@ class TypeChecker {
         
         return expType switch {
             ReservationT => new ReservationT(),
-            _ => Error("reschedule", expType, "reservation", new ReservationT())
+            _ => Error($"Reschedule expected type 'reservation' got '{expType}'", new ReservationT())
         };
     }
     private void HandleTemplateCall(TemplateCall tc, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
@@ -400,18 +430,40 @@ class TypeChecker {
         "";
     }
 
-    // the below three error functions are simply to circumvent switch expression limitations of not being able to add statements
+    // the below two error functions are simply to circumvent switch expression limitations of not being able to add statements
     private bool Error(string msg) {
         errors.Add(msg);
         return false;
     }
-    private TypeT Error(BinaryOperation b, TypeT left, TypeT right, string op, TypeT expected) {
-        errors.Add($"Line {b.LeftExpression.LineNumber}: Operand types '{left.ToString()}' and '{right.ToString()}' incompatible for '{op}'");
-        return expected;
+
+    private TypeT Error(string msg, TypeT fallback) {
+        errors.Add(msg);
+        return fallback;
     }
 
-    private TypeT Error(string expectedType, TypeT actualType, string op, TypeT expected) {
-        errors.Add($"Operator '{op}' expected type '{expectedType}', but got '{actualType.ToString()}'.");
-        return expected;
+    private TypeT LookupCategoryFieldType(string category, string fieldName, EnvV envV, EnvR envR) {
+    // Get all concrete resource IDs belonging to this category from EnvV
+    List<string> resourcesOfCategory = envV.GetResourcesByCategory(category);
+    
+    TypeT? resolvedType = null;
+
+    foreach (string resId in resourcesOfCategory) {
+        if (envR.HasResource(resId) && envR.HasField(resId, fieldName)) {
+            TypeT fieldType = envR.LookupField(resId, fieldName);
+            
+            // Catch type collisions (e.g., one DoubleRoom has int floor, another has string floor)
+            if (resolvedType != null && resolvedType.GetType() != fieldType.GetType()) {
+                errors.Add($"Type collision: Field '{fieldName}' in category '{category}' has conflicting types.");
+                return resolvedType; 
+            }
+            resolvedType = fieldType;
+        }
+    }
+
+    if (resolvedType != null) return resolvedType;
+
+    return new NumberT();
+
+    //error? new Exception($"No resource in category '{category}' contains the field '{fieldName}'.");
     }
 }
