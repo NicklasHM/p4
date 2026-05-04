@@ -241,7 +241,6 @@ class TypeChecker {
     }
   
     private bool QueryIsWellTyped(QueryData queryData, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
-
         bool isWellTyped = true;
 
         EnvV reserveScope = envV.NewScope(); // Reservations allow for local declarations; create local scope
