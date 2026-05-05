@@ -1,5 +1,6 @@
 namespace RAL.TC;
 using RAL.AST;
+using RAL.Interpreter;
 
 /// <summary>  </summary>
 public class EnvV {
@@ -45,23 +46,37 @@ public class EnvV {
         return V.ContainsKey(var);
     }
 
-    public List<string> GetResourcesByCategory(string category) {
-        List<string> resources = new();
+/// <summary> Traverses up the parent envVs and returns the envV for global scope </summary>
+    public EnvV GetGlobalScope()
+    {
+        //
+        EnvV current = this;
+
+        //Traverse up scopes until global, which has no parrent
+        while (current.parent != null)
+        {
+            current = current.parent;
+        }
+
+        //Return global scope
+        return current;
+    }
+
+    ///<summary> Returns a list of all ids of variablesthat are of (or subtype of) the provided category /// </summary>
+    public List<string> GetResourcesByCategory(ResourceT category, EnvV envV, EnvH envH) {
+        List<string> resourceIds = new();
+
+        //Resources are only declarable in global scope, traverse til there
+        EnvV globalScope = envV.GetGlobalScope();
         
         // Check current scope
-        foreach (var kvp in V) {
-            // Warning: In your current HandleResourceDecl, you bind the ResourceId as the Category.
-            // Assuming 'Category' holds the actual category name:
-            if (kvp.Value is ResourceT resT && resT.Category == category) {
-                resources.Add(kvp.Key);
+        foreach (KeyValuePair<string, TypeT> pair in globalScope.V) {
+            //Pattern match on those elements of resource types, add the 
+            if (pair.Value is ResourceT resource && envH.IsSubtype(resource, category)) {
+                resourceIds.Add(pair.Key);
             }
         }
 
-        // Recursively check parent scopes
-        if (parent != null) {
-            resources.AddRange(parent.GetResourcesByCategory(category));
-        }
-
-        return resources.Distinct().ToList();
+        return resourceIds;
     }
 }

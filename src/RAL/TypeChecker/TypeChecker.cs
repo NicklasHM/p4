@@ -1,5 +1,6 @@
 using System.Reflection.Metadata.Ecma335;
 using RAL.AST;
+using RAL.Interpreter;
 namespace RAL.TC;
 
 class TypeChecker {
@@ -49,7 +50,7 @@ class TypeChecker {
             DateTimeV => new DateTimeT(),     
             DurationV => new DurationT(),
 
-            Reference r => HandleReference(r, envV, envR), //cases: id || id.id
+            Reference r => HandleReference(r, envV, envH, envR), //cases: id || id.id
 
             Assignment a => HandleAssignment(a, envV, envC, envH, envT, envR),
 
@@ -337,7 +338,7 @@ class TypeChecker {
         return new ReservationT();
     }
 
-    private TypeT HandleReference(Reference referenceNode, EnvV envV, EnvR envR)
+    private TypeT HandleReference(Reference referenceNode, EnvV envV, EnvH envH, EnvR envR)
     {
         //id case
         if (referenceNode.PropertyId == null) {
@@ -345,11 +346,11 @@ class TypeChecker {
         }
         //id.id case   
         else {
-            return HandlePropertyReference(referenceNode, envV, envR);
+            return HandlePropertyReference(referenceNode, envV, envH, envR);
         }        
     }
 
-    private TypeT HandlePropertyReference(Reference reference, EnvV envV, EnvR envR) {
+    private TypeT HandlePropertyReference(Reference reference, EnvV envV, EnvH envH, EnvR envR) {
         // Ensure that the variable is a resource type. Only these should allow property access.
                 
         TypeT varType = envV.Lookup(reference.VariableId);
@@ -366,14 +367,14 @@ class TypeChecker {
         }
 
         // Case 2: Does not exist in resource environment -> Bounded query variable. Find any resource of this category that has this field.
-        return LookupCategoryFieldType(resource.Category, reference.PropertyId, envV, envR);
+        return LookupCategoryFieldType(resource, reference.PropertyId, envV, envH, envR);
     }
     
     /// <summary> Helper for property reference in bounded query variables within reserve or availability</summary>
-    private TypeT LookupCategoryFieldType(string category, string fieldName, EnvV envV, EnvR envR) {
+    private TypeT LookupCategoryFieldType(ResourceT type, string fieldName, EnvV envV, EnvH envH, EnvR envR) {
 
         // Get all concrete resource IDs belonging to this category from EnvV
-        List<string> resourcesOfCategory = envV.GetResourcesByCategory(category);
+        List<string> resourcesOfCategory = envV.GetResourcesByCategory(type, envV, envH);
         
         TypeT? resolvedType = null;
 
@@ -383,7 +384,7 @@ class TypeChecker {
                 
                 // Catch type collisions (e.g., one DoubleRoom has int floor, another has string floor)
                 if (resolvedType != null && resolvedType.GetType() != fieldType.GetType()) {
-                    errors.Add($"Type collision: Field '{fieldName}' in category '{category}' has conflicting types.");
+                    errors.Add($"Type collision: Field '{fieldName}' in category '{type.Category}' has conflicting types.");
                     return resolvedType; 
                 }
                 resolvedType = fieldType;
@@ -398,12 +399,7 @@ class TypeChecker {
     }
 
      private TypeT HandleAssignment(Assignment assign, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
-        TypeT varType;
-        if(assign.Variable.PropertyId == null) {
-            varType = envV.Lookup(assign.Variable.VariableId);
-        } else {
-            varType = envR.LookupField(assign.Variable.VariableId, assign.Variable.PropertyId);
-        }
+        TypeT varType = HandleReference(assign.Variable, envV, envH, envR);
 
         TypeT expType = ExpType(assign.Value, envV, envC, envH, envT, envR);
         
@@ -411,8 +407,10 @@ class TypeChecker {
             errors.Add($"Expression assignment to resources not allowed");
 
         if (expType != varType) 
-        /*                        if propertyId not null return it, otherwise return variableId  to*/
-            errors.Add($"Variable ${assign.Variable.PropertyId ?? assign.Variable.VariableId} expected type ${varType.ToString()} but got ${expType.ToString()}.");
+        /*  Message with ??:        if propertyId not null return it, otherwise return variableId  to*/
+            errors.Add($"Variable {assign.Variable.PropertyId ?? assign.Variable.VariableId}" +
+                       $"expected type {varType.ToString()} but got {expType.ToString()}."
+            );
 
         return varType; 
     }
