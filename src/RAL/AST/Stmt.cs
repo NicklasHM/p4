@@ -4,7 +4,7 @@ namespace RAL.AST;
 *  Properties are init-only (immutable after construction).*/
 
 /// <summary> Base record class representing Stmt nodes. Establishes a reference type. </summary>
-abstract record class Stmt(int LineNumber);
+public abstract record class Stmt(int LineNumber);
 
 /* Derived records declare positional parameters for all parameters in base record primary constructor. 
    Base record declares and initializes those properties. 
@@ -15,14 +15,6 @@ record class Composite(int LineNumber, Stmt? Stmt1, Stmt? Stmt2 ) : Stmt(LineNum
 record class VarDecl(int LineNumber, TypeT Type, string Identifier) : Stmt(LineNumber);
 //Null -> no properties. Non-null -> at least one property. List<Stmt> -> each element may be Vardecl | Comp(Vardecl, Assignment)
 record class ResourceDecl(int LineNumber, TypeT Type, string Identifier, List<Stmt>? PropertyList) : Stmt(LineNumber);
-
-
-record class ResourceDecl(
-   int LineNumber, 
-   TypeT Type, 
-   string Identifier,
-   List<Stmt>? PropertyList//Null -> no properties. Non-null -> at least one property. List<Stmt> -> each element may be Vardecl | Comp(Vardecl, ExpStmt(Assignment))
-) : Stmt(LineNumber);
 
 record class CategoryDecl (int LineNumber, string CategoryId, string? ParentId) : Stmt(LineNumber);
 

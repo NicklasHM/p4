@@ -1,6 +1,7 @@
 namespace RAL.AST;
 
-public interface TypeT { public string ToString(); }
+///<summary> Singletons not needed, as record types have value equality: Two objects are equal if they're of the same type & storing same values. </summary>
+public abstract record TypeT { }
 
 public sealed record BoolT : TypeT { public override string ToString() { return "bool"; }}
 
@@ -8,6 +9,7 @@ public sealed record NumberT : TypeT { public override string ToString() { retur
 
 public sealed record StringT : TypeT { public override string ToString() { return "string"; }}
 
+/// <summary> Conveys user-defined resource types and pre-defined root "Resource" type, which has Category = "". </summary>
 public sealed record ResourceT(string Category) : TypeT { public override string ToString() { return this.Category; }} // holds the specific category
 
 public sealed record ReservationT : TypeT { public override string ToString() { return "reservation"; }}

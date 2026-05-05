@@ -1,6 +1,6 @@
 namespace RAL.Semantic.Symbols;
 
-using RalType = RAL.AST.Type;
+using RalType = RAL.AST.TypeT;
 
 /*
  Field/property information for a resource.

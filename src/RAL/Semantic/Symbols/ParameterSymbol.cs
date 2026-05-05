@@ -1,6 +1,6 @@
 namespace RAL.Semantic.Symbols;
 
-using RalType = RAL.AST.Type;
+using RalType = RAL.AST.TypeT;
 /*
 Symbol information for a template parameter.
 Parameters are not stored directly in EnvF. Instead, they are stored
