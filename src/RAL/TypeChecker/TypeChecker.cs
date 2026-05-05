@@ -26,7 +26,7 @@ class TypeChecker {
             UnaryOperation u => HandleUnary(u, envV, envC, envH, envT, envR),
 
             Reserve r when QueryIsWellTyped(r.Query, envV, envC, envH, envT, envR) => new ReservationT(),
-            Reserve r  => new ReservationT(),
+            Reserve => new ReservationT(), // should return a reservation either way
 
             Reschedule r => HandleReschedule(r, envV, envC, envH, envT, envR),
 
@@ -158,25 +158,24 @@ class TypeChecker {
         return varType; 
     }
 
-    private TypeT HandlePropertyReference(Reference referenceNode, EnvV envV, EnvR envR)
-    {
+    private TypeT HandlePropertyReference(Reference reference, EnvV envV, EnvR envR) {
         // Ensure that the variable is a resource type. Only these should allow property access.
                 
-        TypeT varType = envV.Lookup(referenceNode.VariableId);
+        TypeT varType = envV.Lookup(reference.VariableId);
  
-        if (varType is not ResourceT resT) {
-            return Error($"Cannot access property '{referenceNode.PropertyId}' on non-resource '{referenceNode.VariableId}'.", new BoolT());
+        if (varType is not ResourceT resource) {
+            return Error($"Cannot access property '{reference.PropertyId}' on non-resource '{reference.VariableId}'.", new BoolT());
         }
 
         // Case 1: Declared resources. Upon declaration, reglardless of having fields, a resource is registered to envR.
-        if (envR.HasResource(referenceNode.VariableId)) {
+        if (envR.HasResource(reference.VariableId)) {
 
             // id.id cases.'PropertyId' can never be null given case from which this method is invoked. Handles cases 
-            return envR.LookupField(referenceNode.VariableId, referenceNode.PropertyId);
+            return envR.LookupField(reference.VariableId, reference.PropertyId);
         }
 
         // Case 2: Does not exist in resource environment -> Bounded query variable. Find any resource of this category that has this field.
-        return LookupCategoryFieldType(resT.Category, referenceNode.PropertyId, envV, envR);
+        return LookupCategoryFieldType(resource.Category, reference.PropertyId, envV, envR);
     }
     
 
@@ -233,8 +232,8 @@ class TypeChecker {
         return exp.Operator switch {
             UnaryOperator.NOT when (operandType is BoolT) => new BoolT(),
             UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected bool but got '{operandType}'", new BoolT()),
-            UnaryOperator.NEG when (operandType is NumberT) => new NumberT(),
 
+            UnaryOperator.NEG when (operandType is NumberT) => new NumberT(),
             UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected number but got '{operandType}'", new NumberT()),
             _ => throw new Exception("Unknown type.") // should never happen
         };
@@ -442,27 +441,28 @@ class TypeChecker {
     }
 
     private TypeT LookupCategoryFieldType(string category, string fieldName, EnvV envV, EnvR envR) {
-    // Get all concrete resource IDs belonging to this category from EnvV
-    List<string> resourcesOfCategory = envV.GetResourcesByCategory(category);
-    
-    TypeT? resolvedType = null;
 
-    foreach (string resId in resourcesOfCategory) {
-        if (envR.HasResource(resId) && envR.HasField(resId, fieldName)) {
-            TypeT fieldType = envR.LookupField(resId, fieldName);
-            
-            // Catch type collisions (e.g., one DoubleRoom has int floor, another has string floor)
-            if (resolvedType != null && resolvedType.GetType() != fieldType.GetType()) {
-                errors.Add($"Type collision: Field '{fieldName}' in category '{category}' has conflicting types.");
-                return resolvedType; 
+        // Get all concrete resource IDs belonging to this category from EnvV
+        List<string> resourcesOfCategory = envV.GetResourcesByCategory(category);
+        
+        TypeT? resolvedType = null;
+
+        foreach (string resId in resourcesOfCategory) {
+            if (envR.HasResource(resId) && envR.HasField(resId, fieldName)) {
+                TypeT fieldType = envR.LookupField(resId, fieldName);
+                
+                // Catch type collisions (e.g., one DoubleRoom has int floor, another has string floor)
+                if (resolvedType != null && resolvedType.GetType() != fieldType.GetType()) {
+                    errors.Add($"Type collision: Field '{fieldName}' in category '{category}' has conflicting types.");
+                    return resolvedType; 
+                }
+                resolvedType = fieldType;
             }
-            resolvedType = fieldType;
         }
-    }
 
-    if (resolvedType != null) return resolvedType;
+        if (resolvedType != null) return resolvedType;
 
-    return new NumberT();
+        return new NumberT();
 
     //error? new Exception($"No resource in category '{category}' contains the field '{fieldName}'.");
     }

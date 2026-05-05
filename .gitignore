@@ -36,3 +36,6 @@ desktop.ini
 *.tmp
 *.temp
 src/RAL/arith_div_over_sub.ra
+src/RAL/arith_left_associative.ra
+tests/parser/valid/precedence/arith_left_associative.ra
+tests/parser/valid/precedence/arith_left_associative.ra

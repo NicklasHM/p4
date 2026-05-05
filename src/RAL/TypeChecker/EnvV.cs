@@ -3,7 +3,7 @@ using RAL.AST;
 
 /// <summary>  </summary>
 public class EnvV {
-    private readonly Dictionary<string, TypeT> E = new();
+    private readonly Dictionary<string, TypeT> V = new();
     private readonly EnvV? parent;
 
     public EnvV(EnvV? parent = null) {
@@ -15,23 +15,23 @@ public class EnvV {
     }
 
     public void Bind(string var, TypeT type) {
-        if (E.ContainsKey(var)) {
+        if (V.ContainsKey(var)) {
             throw new Exception($"Variable '{var}' already declared in current scope.");
         }
 
-        E[var] = type;
+        V[var] = type;
     }
 
     public void ChangeCategory(string var, TypeT type) {
-        if (E.ContainsKey(var)) {
-            E[var] = type;
+        if (V.ContainsKey(var)) {
+            V[var] = type;
         } else {
             throw new Exception($"Use of undeclared variable: '{var}'.");
         }
     }
 
     public TypeT Lookup(string var) {
-        if (E.TryGetValue(var, out TypeT type)) 
+        if (V.TryGetValue(var, out TypeT type)) 
             return type;
 
         if (parent != null) 
@@ -42,14 +42,14 @@ public class EnvV {
 
     // unneeded
     public bool IsLocal(string var) {
-        return E.ContainsKey(var);
+        return V.ContainsKey(var);
     }
 
     public List<string> GetResourcesByCategory(string category) {
         List<string> resources = new();
         
         // Check current scope
-        foreach (var kvp in E) {
+        foreach (var kvp in V) {
             // Warning: In your current HandleResourceDecl, you bind the ResourceId as the Category.
             // Assuming 'Category' holds the actual category name:
             if (kvp.Value is ResourceT resT && resT.Category == category) {
