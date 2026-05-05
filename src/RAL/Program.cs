@@ -35,7 +35,7 @@ class Program {
 
             typeChecker.StmtType(program, new EnvV(), new EnvC(), new EnvH(), new EnvT(), new EnvR());
 
-            Console.WriteLine("\n\n\n\nProgram:\n"+ program.ToString() + "\n\n\n\n\n");
+            //Console.WriteLine("\n\n\n\nProgram:\n"+ program.ToString() + "\n\n\n\n\n");
 
             foreach (string error in typeChecker.errors)
             {

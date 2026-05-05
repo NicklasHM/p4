@@ -16,7 +16,7 @@ record class DurationV(int LineNumber, string Value) : Exp(LineNumber);
 record class Reference(int LineNumber, string VariableId, string? PropertyId) : Exp(LineNumber);
 
 //See the dictionary key type in /Interpreter/EnvV.cs for the choice of string type Identifier.
-record class Assignment(int LineNumber, string VariableId, string? PropertyId, Exp Value) : Exp(LineNumber);
+record class Assignment(int LineNumber, Reference Variable, Exp Value) : Exp(LineNumber);
 
 record class BinaryOperation(int LineNumber, Exp LeftExpression, BinaryOperator Operator, Exp RightExpression ) : Exp(LineNumber);
 

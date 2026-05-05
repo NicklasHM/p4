@@ -1,7 +1,7 @@
 namespace RAL.AST;
 
 ///<summary> Singletons not needed, as record types have value equality: Two objects are equal if they're of the same type & storing same values. </summary>
-public interface TypeT { public string ToString(); }
+public abstract record TypeT { }
 
 public sealed record BoolT : TypeT { public override string ToString() { return "bool"; }}
 

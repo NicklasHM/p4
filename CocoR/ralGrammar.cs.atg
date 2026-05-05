@@ -176,8 +176,8 @@ PRODUCTIONS
     Type <out TypeT type>  (. int lineNumber = t.line; .)
     ident                 (. string identifier = t.val; stmt = new VarDecl(lineNumber, type, identifier); .)
     [                     //Chained with an assignment,
-      ":="                //Make composite with just-made declaration node
-      Exp <out Exp exp> (. stmt = new Composite(lineNumber, stmt, new ExpStmt(lineNumber, new Assignment(lineNumber, identifier, null, exp))); .)
+      "="                //Make composite with just-made declaration node
+      Exp <out Exp exp> (. stmt = new Composite(lineNumber, stmt, new ExpStmt(lineNumber, new Assignment(lineNumber, new Reference(lineNumber, identifier, null), exp))); .)
     ]
   .
 
@@ -357,8 +357,8 @@ PRODUCTIONS
       ident             (. propertyId = t.val; exp = new Reference(lineNumber, variableId, propertyId); .)
     ] 
     [ (  // Assignment
-        ":="
-        Exp<out exp>    (. exp = new Assignment(lineNumber, variableId, propertyId, exp); .)
+        "="
+        Exp<out exp>    (. exp = new Assignment(lineNumber, new Reference(lineNumber, variableId, propertyId), exp); .)
       /* |  Must have requirement: Update a Resource. 
             Property values can be assigned with above, 
             without below the set of properties cannot be changed/reasigned.  Ask Giovanni
