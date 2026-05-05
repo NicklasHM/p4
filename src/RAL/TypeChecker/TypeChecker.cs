@@ -114,10 +114,10 @@ class TypeChecker {
     private void HandleResourceDecl(ResourceDecl resDecl, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
         
         if(resDecl.Type is not ResourceT r) 
-            errors.Add("Wrong type");
+            errors.Add($"Expected type 'resource' got '{resDecl.Type}'");
 
         else if(!envC.CategoryIsDeclared(r.Category))
-            errors.Add($"Use of undeclared category");
+            errors.Add($"Use of undeclared category '{r.Category}'");
         
         envV.Bind(resDecl.Identifier, resDecl.Type); // bind resource to variable environment
 
@@ -141,7 +141,7 @@ class TypeChecker {
                     HandleFieldDecl(resDecl, varDecl, fieldScope, envR);
 
                     TypeT expType = ExpType(exp.Expression, fieldScope, envC, envH, envT, envR);
-                    if (varDecl.Type != expType) errors.Add($"Variable {varDecl.Identifier} expected type '{varDecl.Type}' got '{expType}'");
+                    if (varDecl.Type != expType) errors.Add($"Variable '{varDecl.Identifier}' expected type '{varDecl.Type}' got '{expType}'");
 
                     break;
             }
@@ -150,7 +150,7 @@ class TypeChecker {
 
     private void HandleFieldDecl(ResourceDecl resDecl, VarDecl varDecl, EnvV envV ,EnvR envR) {
         if (varDecl.Type is ResourceT || varDecl.Type is ReservationT) {
-            errors.Add("Type not allowed");
+            errors.Add($"'{varDecl.Type}' not allowed as field type for resource");
         } else {
             //A new scope is passed so within the resource envV is used as lookup, when assigning
             envV.Bind(varDecl.Identifier, varDecl.Type);
@@ -183,13 +183,12 @@ class TypeChecker {
         if(formalParamTypes == null && tc.ArgList == null) return; // both lists are empty; illtyping is impossible
 
         if(formalParamTypes != null && tc.ArgList == null || 
-           formalParamTypes == null && tc.ArgList != null) { // XOR?
-            errors.Add("Number of expected arguments don't match actual.");
+           formalParamTypes == null && tc.ArgList != null ||
+           formalParamTypes.Count != tc.ArgList.Count) { // XOR?
+            errors.Add($"{tc.TemplateId} expected {(formalParamTypes == null ? "0" : formalParamTypes.Count)}" +
+                                        $"arguments got {(tc.ArgList == null ? "0" : tc.ArgList.Count)}");
             return; // return to avoid null dereference exceptions
         }
-
-        if(formalParamTypes.Count != tc.ArgList.Count) // argument count must match: false-positives could arise otherwise
-            errors.Add($"{tc.TemplateId} expected {formalParamTypes.Count} arguments got {tc.ArgList.Count}");
 
         for (int i = 0; i < formalParamTypes.Count; i++) { // could loop over formal or actual parameter count: they are interchangable at this point
             TypeT expected = formalParamTypes[i];
@@ -197,11 +196,11 @@ class TypeChecker {
             
             if(actual is ResourceT a && expected is ResourceT e) {// if both are resources but not subtypes: produce an error
                 if(!envH.IsSubtype(a, e))
-                    errors.Add($"Argument {i + 1} of template '{tc.TemplateId}' of type {actual.ToString()} is not compatible with {expected.ToString()}.");
+                    errors.Add($"Argument {i + 1} of template '{tc.TemplateId}' of type '{actual.ToString()}' is not compatible with '{expected.ToString()}'.");
             }
             // If both not resources: check simple equality
             else if(expected != actual) {
-                errors.Add($"Argument {i + 1} of template '{tc.TemplateId}' expected {expected.ToString()} got {actual.ToString()}."); 
+                errors.Add($"Argument {i + 1} of template '{tc.TemplateId}' expected '{expected.ToString()}' got '{actual.ToString()}'."); 
             }
         } 
     }
@@ -261,7 +260,7 @@ class TypeChecker {
                 TypeT quantityType = ExpType(resourceSpec.Quantity, envV, envC, envH, envT, envR);
 
                 if (quantityType is not NumberT) {
-                    errors.Add($"Expected type 'number' got '{quantityType}");
+                    errors.Add($"Expected type 'Number' got '{quantityType}");
                     isWellTyped = false;
                 }
 
@@ -278,14 +277,14 @@ class TypeChecker {
             // "id"
             else if (resourceSpec.Identifier != null && resourceSpec.Quantity == null) {
                 if (envV.Lookup(resourceSpec.Identifier) is not ResourceT) {
-                    errors.Add($"Expected type 'resource' got '{resourceSpec.Identifier}'");
+                    errors.Add($"Expected type 'Resource' got '{resourceSpec.Identifier}'");
                     isWellTyped = false;
                 }
             }
 
             else {
                 // invalid combination
-                errors.Add("Invalid resource specification");
+                errors.Add("Invalid resource specification"); // should never happen
                 isWellTyped = false;
             }
         }
@@ -383,6 +382,7 @@ class TypeChecker {
                 TypeT fieldType = envR.LookupField(resId, fieldName);
                 
                 // Catch type collisions (e.g., one DoubleRoom has int floor, another has string floor)
+                // SUBJECT FOR EVALUATION SUBJECT FOR EVALUATION SUBJECT FOR EVALUATION SUBJECT FOR EVALUATION SUBJECT FOR EVALUATION
                 if (resolvedType != null && resolvedType.GetType() != fieldType.GetType()) {
                     errors.Add($"Type collision: Field '{fieldName}' in category '{type.Category}' has conflicting types.");
                     return resolvedType; 
@@ -404,12 +404,12 @@ class TypeChecker {
         TypeT expType = ExpType(assign.Value, envV, envC, envH, envT, envR);
         
         if (varType is ResourceT) 
-            errors.Add($"Expression assignment to resources not allowed");
+            errors.Add($"Assignment of expression to resource not allowed");
 
         if (expType != varType) 
         /*  Message with ??:        if propertyId not null return it, otherwise return variableId  to*/
-            errors.Add($"Variable {assign.Variable.PropertyId ?? assign.Variable.VariableId}" +
-                       $"expected type {varType.ToString()} but got {expType.ToString()}."
+            errors.Add($"Variable '{assign.Variable.PropertyId ?? assign.Variable.VariableId}' " +
+                       $"expected type '{varType.ToString()}' got '{expType.ToString()}'."
             );
 
         return varType; 
@@ -422,7 +422,7 @@ class TypeChecker {
         
         return expType switch {
             ReservationT => new ReservationT(),
-            _ => Error($"Reschedule expected type 'reservation' got '{expType}'", new ReservationT())
+            _ => Error($"Reschedule expected type 'Reservation' got '{expType}'", new ReservationT())
         };
     }
 
@@ -438,7 +438,7 @@ class TypeChecker {
             BinaryOperator.SUB => (left, right) switch {
                 (NumberT, NumberT)     => new NumberT(),   // num + num
                 (DateTimeT, DurationT) => new DateTimeT(), // dt + dur
-                _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new NumberT())            },
+                _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new NumberT())},
 
 
             BinaryOperator.MUL or 
@@ -478,11 +478,12 @@ class TypeChecker {
         string operatorAsString = EnumToOp(exp.Operator);
         return exp.Operator switch {
             UnaryOperator.NOT when (operandType is BoolT) => new BoolT(),
-            UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected bool but got '{operandType}'", new BoolT()),
+            UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected bool got '{operandType}'", new BoolT()),
 
             UnaryOperator.NEG when (operandType is NumberT) => new NumberT(),
-            UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected number but got '{operandType}'", new NumberT()),
-            _ => throw new Exception("Unknown type.") // should never happen
+            UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected number got '{operandType}'", new NumberT()),
+            
+            _ => throw new Exception("Unknown unary operator.") // should never happen
         };
     }
 
