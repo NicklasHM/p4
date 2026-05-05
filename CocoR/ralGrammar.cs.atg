@@ -43,7 +43,7 @@ Stmt toComposite(List<Stmt> stmts) {
 /* For ident in VarDecl and Primary Exp*/
 bool FollowedByIdent() {
     Token next = scanner.Peek();
-    return (la.kind == _ident || la.val == "Resource" ) && next.kind == _ident;
+    return (la.kind == _ident || la.val == "Resource" ) && next.kind == _ident; /* "la.val == "Resource"": Subject for removal */
 }
 
 /* For number in Primary Exp and Duration */
@@ -208,7 +208,6 @@ PRODUCTIONS
   // Used in resource declaration & declaring formal parameters of a template
   ResourceType<out TypeT type> (. type = null; .)
   =
-    "Resource"      (. type = new ResourceT(""); .)    /* A generic resource, super type of all below. ident token can never be empty string, this is unique  */
     | ident         (. type = new ResourceT(t.val); .) //* Resource of a user-defined category */
   .
 

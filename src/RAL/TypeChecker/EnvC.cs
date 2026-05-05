@@ -3,7 +3,7 @@ using RAL.AST;
 
 /// <summary> Environment containing the set of user-defined Categories. /// </summary>
 public class EnvC {
-    private HashSet<string> C = new();
+    private HashSet<string> C = new() {"Resource"};
 
     public bool CategoryIsDeclared(string category) {
         return C.Contains(category);
