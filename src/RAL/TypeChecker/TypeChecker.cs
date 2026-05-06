@@ -97,8 +97,10 @@ class TypeChecker {
         //Add the new category to the set
         envC.AddCategory(cd.CategoryId);
 
-        //Handle relation to parent if any - 'is a id' part of [category id is a id]
-        if(cd.ParentId != null) { 
+        //Handle relation to parent - 'is a id' part of [category id is a id]. If no relation is explicitly provided, parent is 'Resource'
+        if(cd.ParentId == null) {
+            envH.EstablishRelation(new ResourceT(cd.CategoryId), new ResourceT("Resource"));
+        } else { 
             
             //Ensure parent is in the set of categories
             if(!envC.CategoryIsDeclared(cd.ParentId)) 
@@ -107,8 +109,6 @@ class TypeChecker {
             //Delegate establishment of parent relation to hierarchy environment. Guards cyclic relations
             envH.EstablishRelation(new ResourceT(cd.CategoryId), new ResourceT(cd.ParentId)); 
         }
-
-        //problem not all declarations are handled, i.e. no parent --> root should be. Resource
     }
 
     private void HandleResourceDecl(ResourceDecl resDecl, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR) {
@@ -194,8 +194,8 @@ class TypeChecker {
             TypeT expected = formalParamTypes[i];
             TypeT actual = ExpType(tc.ArgList[i], envV, envC, envH, envT, envR);
             
-            if(actual is ResourceT a && expected is ResourceT e) {// if both are resources but not subtypes: produce an error
-                if(!envH.IsSubtype(a, e))
+            if(actual is ResourceT a && expected is ResourceT e) { // if both are resources
+                if(!envH.IsSubtype(a, e)) // but not compatible types
                     errors.Add($"Argument {i + 1} of template '{tc.TemplateId}' of type '{actual.ToString()}' is not compatible with '{expected.ToString()}'.");
             }
             // If both not resources: check simple equality
