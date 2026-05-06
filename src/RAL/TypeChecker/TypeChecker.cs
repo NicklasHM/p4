@@ -1,6 +1,4 @@
-using System.Reflection.Metadata.Ecma335;
 using RAL.AST;
-using RAL.Interpreter;
 namespace RAL.TC;
 
 class TypeChecker {
@@ -434,23 +432,27 @@ class TypeChecker {
         string operatorAsString = EnumToOp(exp.Operator);
         return exp.Operator switch
         {
+            // + -
             BinaryOperator.ADD or 
             BinaryOperator.SUB => (left, right) switch {
                 (NumberT, NumberT)     => new NumberT(),   // num + num
                 (DateTimeT, DurationT) => new DateTimeT(), // dt + dur
                 _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new NumberT())},
 
-
+            // * /
             BinaryOperator.MUL or 
             BinaryOperator.DIV => (left, right) switch {
                 (NumberT, NumberT) => new NumberT(), // num */ num
                 _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new NumberT())},
-
-            BinaryOperator.LT   or
-            BinaryOperator.GT   or
-            BinaryOperator.LTEQ or
+            
+            // <, >, 
+            BinaryOperator.LT   or // <
+            BinaryOperator.GT   or // >
+            BinaryOperator.LTEQ or // <=, >=
             BinaryOperator.GTEQ => (left, right) switch {
                 (NumberT, NumberT) => new BoolT(),
+                (DateTimeT, DateTimeT) => new BoolT(),
+                (DurationT, DurationT) => new BoolT(),
                 _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new BoolT())},
 
             BinaryOperator.EQ or 
@@ -458,6 +460,8 @@ class TypeChecker {
                 (StringT, StringT) => new BoolT(),
                 (BoolT, BoolT)     => new BoolT(), // (4 < 7) == (7 > 11 and "hello" == "world")
                 (NumberT, NumberT) => new BoolT(),
+                (DurationT, DurationT) => new BoolT(),
+                (DateTimeT, DateTimeT) => new BoolT(),
                 _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new BoolT())},
 
             BinaryOperator.OR or BinaryOperator.AND => (left, right) switch {
@@ -478,10 +482,10 @@ class TypeChecker {
         string operatorAsString = EnumToOp(exp.Operator);
         return exp.Operator switch {
             UnaryOperator.NOT when (operandType is BoolT) => new BoolT(),
-            UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected bool got '{operandType}'", new BoolT()),
+            UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected 'Bool' got '{operandType}'", new BoolT()),
 
             UnaryOperator.NEG when (operandType is NumberT) => new NumberT(),
-            UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected number got '{operandType}'", new NumberT()),
+            UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected 'Number' got '{operandType}'", new NumberT()),
             
             _ => throw new Exception("Unknown unary operator.") // should never happen
         };

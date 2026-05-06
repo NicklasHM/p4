@@ -1,7 +1,7 @@
 using RAL.AST;
 using RAL.TC;
 
-namespace RAL;
+namespace RAL.Interpreter;
 
 class Program {
     static void Main(string[] args) {
@@ -37,10 +37,14 @@ class Program {
 
             //Console.WriteLine("\n\n\n\nProgram:\n"+ program.ToString() + "\n\n\n\n\n");
 
+            
+            
             foreach (string error in typeChecker.errors)
             {
                 Console.WriteLine("\n" + error + "\n");
             }
+
+            Interpreter.EvalStmt(program);
 
 
         } else {
