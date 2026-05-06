@@ -54,12 +54,14 @@ Stmt toComposite(List<Stmt> stmts) {
 /* ___________________LL(1) Conflict Resolvers_____________________*/
 /* For ident in VarDecl and Primary Exp*/
 bool FollowedByIdent() {
+    scanner.ResetPeek();
     Token next = scanner.Peek();
     return la.kind == _ident && next.kind == _ident;
 }
 
 /* For number in Primary Exp and Duration */
 bool FollowedByUnit() {
+    scanner.ResetPeek();
     Token next = scanner.Peek();
     return la.kind == _number &&
            (next.val == "w" || next.val == "week" || next.val == "weeks" ||
@@ -89,6 +91,7 @@ bool FollowedByHour() {
 
 // Resolver between alternatives within ResourceExp: r | a*id *id
 bool FollowedByAND_or_FROM() {
+    scanner.ResetPeek();
     Token next = scanner.Peek();
     return la.kind == _ident && (next.val == "and" || next.val == "from");
 }

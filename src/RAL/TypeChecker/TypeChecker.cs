@@ -451,6 +451,8 @@ class TypeChecker {
             BinaryOperator.LTEQ or // <=, >=
             BinaryOperator.GTEQ => (left, right) switch {
                 (NumberT, NumberT) => new BoolT(),
+                (DateTimeT, DateTimeT) => new BoolT(),
+                (DurationT, DurationT) => new BoolT(),
                 _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new BoolT())},
 
             BinaryOperator.EQ or 
@@ -458,6 +460,8 @@ class TypeChecker {
                 (StringT, StringT) => new BoolT(),
                 (BoolT, BoolT)     => new BoolT(), // (4 < 7) == (7 > 11 and "hello" == "world")
                 (NumberT, NumberT) => new BoolT(),
+                (DurationT, DurationT) => new BoolT(),
+                (DateTimeT, DateTimeT) => new BoolT(),
                 _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new BoolT())},
 
             BinaryOperator.OR or BinaryOperator.AND => (left, right) switch {

@@ -26,7 +26,13 @@ public class Interpreter {
         {
             case ExpStmt s: Console.WriteLine(EvalExp(s.Expression)); break;
 
-            default: throw new Exception("Unknown statement.");
+            case Composite c: {
+                if(c.Stmt1 != null) EvalStmt(c.Stmt1);
+                if(c.Stmt2 != null) EvalStmt(c.Stmt2);
+                break;
+            }
+
+            default: throw new Exception($"Unknown statement.");
         }
     }
 
@@ -108,6 +114,39 @@ public class Interpreter {
             BinaryOperator.GTEQ when left is NumberVal l && right is NumberVal r
                 => new BoolVal(l.Value >= r.Value),
 
+
+            /*_________________Relational operations: DateTime _______________*/
+            BinaryOperator.LT when left is DateTimeVal l && right is DateTimeVal r
+                => new BoolVal(l.Value < r.Value),
+
+            // >
+            BinaryOperator.GT when left is DateTimeVal l && right is DateTimeVal r
+                => new BoolVal(l.Value > r.Value),
+
+            // <=
+            BinaryOperator.LTEQ when left is DateTimeVal l && right is DateTimeVal r
+                => new BoolVal(l.Value <= r.Value),
+
+            // >=
+            BinaryOperator.GTEQ when left is DateTimeVal l && right is DateTimeVal r
+                => new BoolVal(l.Value >= r.Value),
+
+            /*_________________Relational operations: Duration _______________*/
+            BinaryOperator.LT when left is DurationVal l && right is DurationVal r
+                => new BoolVal(l.Value < r.Value),
+
+            // >
+            BinaryOperator.GT when left is DurationVal l && right is DurationVal r
+                => new BoolVal(l.Value > r.Value),
+
+            // <=
+            BinaryOperator.LTEQ when left is DurationVal l && right is DurationVal r
+                => new BoolVal(l.Value <= r.Value),
+
+            // >=
+            BinaryOperator.GTEQ when left is DurationVal l && right is DurationVal r
+                => new BoolVal(l.Value >= r.Value),
+
             /*__________________Equality: ==, !=________________________*/
 
             //Numeric operands
@@ -133,6 +172,19 @@ public class Interpreter {
             BinaryOperator.NEQ when left is StringVal l && right is StringVal r
                 => new BoolVal(l.Value != r.Value),
 
+            // DateTime operands
+            BinaryOperator.EQ when left is DateTimeVal l && right is DateTimeVal r
+                => new BoolVal(l.Value == r.Value),
+
+            BinaryOperator.NEQ when left is DateTimeVal l && right is DateTimeVal r
+                => new BoolVal(l.Value != r.Value),
+
+            // Duration operands
+            BinaryOperator.EQ when left is DurationVal l && right is DurationVal r
+                => new BoolVal(l.Value == r.Value),
+
+            BinaryOperator.NEQ when left is DurationVal l && right is DurationVal r
+                => new BoolVal(l.Value != r.Value),
 
             /*__________________Logical Operators_________________*/
             
