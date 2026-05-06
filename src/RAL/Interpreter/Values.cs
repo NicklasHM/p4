@@ -15,7 +15,7 @@ using System.Globalization;
 */
 
 
-abstract record Value {}
+public abstract record Value {}
 
 /* For now, Number is represented as float because the language 
    uses one Number type for both integer-like and decimal values. */

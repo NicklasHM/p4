@@ -51,12 +51,6 @@ Stmt toComposite(List<Stmt> stmts) {
   return result;
 }
 
-TimeSpan ParseDuration(string token) {
-  String.Split()
-
-}
-
-
 /* ___________________LL(1) Conflict Resolvers_____________________*/
 /* For ident in VarDecl and Primary Exp*/
 bool FollowedByIdent() {
@@ -453,17 +447,44 @@ PRODUCTIONS
   Datetime<out Exp exp> = (. string dateTimeToParse = null; .) 
     dateLit   (. dateTimeToParse = t.val; .)
     [
-      timeLit (. dateTimeToParse += t.val; .) 
+      timeLit (. dateTimeToParse += " " + t.val; .) 
     ] 
               (. exp = new DateTimeV(t.line, DateTime.Parse(dateTimeToParse, new CultureInfo("fr-FR"))); .)
     .
 
   /*alternative that does not enforce unit structure/repetition = number Unit {number Unit} */
-  Duration<out Exp exp> (. exp = new DurationV(t.line, t.val); .) = 
-      IF(FollowedByWeek()) number ("w" | "week" | "weeks") [number ("d" | "day" | "days" )] [number ("h" | "hour" | "hours" )] [number ("m" | "minute" | "minutes")]
-    | IF(FollowedByDay()) number ("d" | "day" | "days" ) [number ("h" | "hour" | "hours" )] [number ("m" | "minute" | "minutes")]
-    | IF(FollowedByHour()) number ("h" | "hour" | "hours" ) [number ("m" | "minute" | "minutes")]
-    | number ("m" | "minute" | "minutes")
+  /* number, not expression. Would give lookahead problem otherwise */
+  Duration<out Exp exp> (. exp = null; int days = 0, hours = 0, minutes = 0; .) =
+      (
+      IF(FollowedByWeek())
+      number (. days = int.Parse(t.val) * 7; .)
+      ("w" | "week" | "weeks")
+      [ number (. days += int.Parse(t.val); .) 
+      ("d" | "day" | "days") ]
+      [ number (. hours = int.Parse(t.val); .) 
+      ("h" | "hour" | "hours") ]
+      [ number (. minutes = int.Parse(t.val); .) 
+      ("m" | "minute" | "minutes") ]
+
+    | IF(FollowedByDay())
+      number (. days = int.Parse(t.val); .)
+      ("d" | "day" | "days")
+      [ number (. hours = int.Parse(t.val); .) 
+      ("h" | "hour" | "hours") ]
+      [ number (. minutes = int.Parse(t.val); .) 
+      ("m" | "minute" | "minutes") ]
+
+    | IF(FollowedByHour())
+      number (. hours = int.Parse(t.val); .)
+      ("h" | "hour" | "hours")
+      [ number (. minutes = int.Parse(t.val); .) 
+      ("m" | "minute" | "minutes") ]
+
+    | number (. minutes = int.Parse(t.val); .)
+      ("m" | "minute" | "minutes")
+    )
+
+    (. exp = new DurationV(t.line, new TimeSpan(days, hours, minutes, 0)); .)
   .
 
                    

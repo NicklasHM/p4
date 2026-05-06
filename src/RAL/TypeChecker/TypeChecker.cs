@@ -1,6 +1,4 @@
-using System.Reflection.Metadata.Ecma335;
 using RAL.AST;
-using RAL.Interpreter;
 namespace RAL.TC;
 
 class TypeChecker {
@@ -480,10 +478,10 @@ class TypeChecker {
         string operatorAsString = EnumToOp(exp.Operator);
         return exp.Operator switch {
             UnaryOperator.NOT when (operandType is BoolT) => new BoolT(),
-            UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected bool got '{operandType}'", new BoolT()),
+            UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected 'Bool' got '{operandType}'", new BoolT()),
 
             UnaryOperator.NEG when (operandType is NumberT) => new NumberT(),
-            UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected number got '{operandType}'", new NumberT()),
+            UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected 'Number' got '{operandType}'", new NumberT()),
             
             _ => throw new Exception("Unknown unary operator.") // should never happen
         };

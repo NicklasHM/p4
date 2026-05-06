@@ -20,11 +20,23 @@ Runtime checks are still used for cases such as division by zero.
 public class Interpreter {
     private const float Epsilon = 0.00001f;
 
-    Value EvalExp(Exp exp) {
+    public static void EvalStmt(Stmt stmt)
+    {
+        switch(stmt)
+        {
+            case ExpStmt s: Console.WriteLine(EvalExp(s.Expression)); break;
+
+            default: throw new Exception("Unknown statement.");
+        }
+    }
+
+    public static Value EvalExp(Exp exp) {
         return exp switch {
             NumberV n => new NumberVal(n.Value),
             BoolV b => new BoolVal(b.Value),
             StringV s => new StringVal(s.Value),
+            DateTimeV dt => new DateTimeVal(dt.Value),
+            DurationV dur => new DurationVal(dur.Value),
 
             UnaryOperation u => EvalUnary(u),
             BinaryOperation b => EvalBinary(b),
@@ -33,18 +45,21 @@ public class Interpreter {
         };
     }
 
-    private Value EvalUnary(UnaryOperation exp) {
+    static private Value EvalUnary(UnaryOperation exp) {
         Value value = EvalExp(exp.Expression);
 
         return exp.Operator switch {
             UnaryOperator.NOT when value is BoolVal b
                 => new BoolVal(!b.Value),
+            
+            UnaryOperator.NEG when value is NumberVal n
+                => new NumberVal(-n.Value),
 
             _ => throw new Exception($"Line {exp.LineNumber}: Invalid unary operation.")
         };
     }
 
-    private Value EvalBinary(BinaryOperation exp) {
+    static private Value EvalBinary(BinaryOperation exp) {
         Value left = EvalExp(exp.LeftExpression);
 
         Value right = EvalExp(exp.RightExpression);
@@ -52,29 +67,26 @@ public class Interpreter {
         return exp.Operator switch {
 
             /*________________Arithmetic operations_______________*/
-            // + 
+            
+            //Numeric operands + - * /
+            
             BinaryOperator.ADD when left is NumberVal l && right is NumberVal r
                 => new NumberVal(l.Value + r.Value),
 
-            // - 
             BinaryOperator.SUB when left is NumberVal l && right is NumberVal r
                 => new NumberVal(l.Value - r.Value),
 
-            // *
             BinaryOperator.MUL when left is NumberVal l && right is NumberVal r
                 => new NumberVal(l.Value * r.Value),
             
-            // /
             BinaryOperator.DIV when left is NumberVal l && right is NumberVal r
                 => DivideNumbers(l, r, exp.LineNumber),
 
             
-            //Time operands
-            // dt + dur
+            //Time operands:    dt + dur,    dt - dur
             BinaryOperator.ADD when left is DateTimeVal dt && right is DurationVal dur
                 => new DateTimeVal(dt.Value + dur.Value),
             
-            // dt - dur
             BinaryOperator.SUB when left is DateTimeVal dt && right is DurationVal dur
                 => new DateTimeVal(dt.Value - dur.Value),
         
@@ -96,7 +108,7 @@ public class Interpreter {
             BinaryOperator.GTEQ when left is NumberVal l && right is NumberVal r
                 => new BoolVal(l.Value >= r.Value),
 
-            /*__________________Equality ________________________*/
+            /*__________________Equality: ==, !=________________________*/
 
             //Numeric operands
             BinaryOperator.EQ when left is NumberVal l && right is NumberVal r
