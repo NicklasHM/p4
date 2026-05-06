@@ -43,7 +43,7 @@ Stmt toComposite(List<Stmt> stmts) {
 /* For ident in VarDecl and Primary Exp*/
 bool FollowedByIdent() {
     Token next = scanner.Peek();
-    return (la.kind == _ident || la.val == "Resource" ) && next.kind == _ident; /* "la.val == "Resource"": Subject for removal */
+    return la.kind == _ident && next.kind == _ident; /* "la.val == "Resource"": Subject for removal */
 }
 
 /* For number in Primary Exp and Duration */
@@ -207,8 +207,8 @@ PRODUCTIONS
 
   // Used in resource declaration & declaring formal parameters of a template
   ResourceType<out TypeT type> (. type = null; .)
-  =
-    | ident         (. type = new ResourceT(t.val); .) //* Resource of a user-defined category */
+  = 
+    ident         (. type = new ResourceT(t.val); .) //* Resource of a user-defined category */
   .
 
   // Used in variable declaration & formal parameters of a template
