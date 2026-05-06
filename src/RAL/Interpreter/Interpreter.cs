@@ -86,7 +86,7 @@ public class Interpreter {
                 => new NumberVal(l.Value * r.Value),
             
             BinaryOperator.DIV when left is NumberVal l && right is NumberVal r
-                => DivideNumbers(l, r, exp.LineNumber),
+                => DivideNumbers(l, r, exp.LineNumber), // x / 0 = inf in C# (??)
 
             
             //Time operands:    dt + dur,    dt - dur

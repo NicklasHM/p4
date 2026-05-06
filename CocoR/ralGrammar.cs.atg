@@ -99,7 +99,6 @@ bool FollowedByAND_or_FROM() {
 CHARACTERS
   letter        = 'A'..'Z' + 'a'..'z' .
   digit         = '0'..'9' .
-  leadingDigit  = '1'..'9' .
   underscore    = '_' .
   dash          = '-' .
   space         =  ' ' .
@@ -108,7 +107,7 @@ CHARACTERS
 
 TOKENS
   ident     = (letter | underscore) { letter | digit | underscore } .
-  number    = leadingDigit { digit } [ '.' digit { digit } ] .
+  number    = digit { digit } [ '.' digit { digit } ] .
   stringLit = '"' { letter | digit | space | underscore | dash } '"' .
   dateLit   = digit digit slash digit digit dash digit digit digit digit .
   timeLit   = digit digit colon digit digit .
