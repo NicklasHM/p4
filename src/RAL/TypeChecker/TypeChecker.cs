@@ -434,21 +434,23 @@ class TypeChecker {
         string operatorAsString = EnumToOp(exp.Operator);
         return exp.Operator switch
         {
+            // + -
             BinaryOperator.ADD or 
             BinaryOperator.SUB => (left, right) switch {
                 (NumberT, NumberT)     => new NumberT(),   // num + num
                 (DateTimeT, DurationT) => new DateTimeT(), // dt + dur
                 _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new NumberT())},
 
-
+            // * /
             BinaryOperator.MUL or 
             BinaryOperator.DIV => (left, right) switch {
                 (NumberT, NumberT) => new NumberT(), // num */ num
                 _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new NumberT())},
-
-            BinaryOperator.LT   or
-            BinaryOperator.GT   or
-            BinaryOperator.LTEQ or
+            
+            // <, >, 
+            BinaryOperator.LT   or // <
+            BinaryOperator.GT   or // >
+            BinaryOperator.LTEQ or // <=, >=
             BinaryOperator.GTEQ => (left, right) switch {
                 (NumberT, NumberT) => new BoolT(),
                 _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new BoolT())},
