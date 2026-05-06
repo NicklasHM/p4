@@ -43,7 +43,7 @@ Stmt toComposite(List<Stmt> stmts) {
 /* For ident in VarDecl and Primary Exp*/
 bool FollowedByIdent() {
     Token next = scanner.Peek();
-    return la.kind == _ident && next.kind == _ident; /* "la.val == "Resource"": Subject for removal */
+    return la.kind == _ident && next.kind == _ident;
 }
 
 /* For number in Primary Exp and Duration */

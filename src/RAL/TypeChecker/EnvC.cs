@@ -10,7 +10,7 @@ public class EnvC {
     }
 
     public void AddCategory(string category) {
-        if(CategoryIsDeclared(category)) throw new Exception("Category has already been declared");
+        if(CategoryIsDeclared(category)) throw new Exception($"Category '{category}' has already been declared");
         C.Add(category);
     }
 }
