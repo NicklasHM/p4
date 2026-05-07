@@ -6,7 +6,7 @@ using RAL.AST;
 /// </summary> 
 public class EnvR {
 
-    ///Main data structure. R = ResourceId -> (FieldId -> Type)
+    ///Main data structure. R = ResourceId -> (PropertyId -> Type)
     private readonly Dictionary<string, Dictionary<string, TypeT>> R = new();
 
     /// <summary> All resources must be registered. Whether fields or not  /// </summary>
@@ -39,6 +39,8 @@ public class EnvR {
 
         //Bind type to field
         fieldEnvironment.Add(fieldId, type);
+
+        Console.WriteLine("EnvR Binding " + resourceId + "," + fieldId + "->"+ type + "\n");
     }
 
     public TypeT LookupField(string resourceId, string fieldName) {
@@ -52,5 +54,17 @@ public class EnvR {
             return fieldType;
 
         throw new Exception($"Unknown field '{fieldName}' in resource '{resourceId}'.");
+    }
+
+     /// <summary> Returns inner map of categoryId, throws exception if not registered </summary>
+    public Dictionary<string, TypeT> GetPropertyTypeMap (string resourceId)
+    {
+        //Guard invalid categoryId. tryGetValue returns false if dictionary did not contain key 'categoryId'.
+        if(R.TryGetValue(resourceId, out Dictionary<string, TypeT> propertyTypeMap) == false) {
+            throw new Exception($"Invalid Resource: '{resourceId}' argument!");
+        }
+
+        //Key: CategoryID valid, 'propertyTypeMap' contains value: dictionary<propertyId -> type>
+        return propertyTypeMap;
     }
 }

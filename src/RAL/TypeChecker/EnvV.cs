@@ -21,6 +21,8 @@ public class EnvV {
         }
 
         V[var] = type;
+
+        Console.WriteLine("EnvV Binding " + var + " to: " + V[var] + "\n");
     }
 
     public void ChangeCategory(string var, TypeT type) {
@@ -60,23 +62,5 @@ public class EnvV {
 
         //Return global scope
         return current;
-    }
-
-    ///<summary> Returns a list of all ids of variablesthat are of (or subtype of) the provided category /// </summary>
-    public List<string> GetResourcesByCategory(ResourceT category, EnvV envV, EnvH envH) {
-        List<string> resourceIds = new();
-
-        //Resources are only declarable in global scope, traverse til there
-        EnvV globalScope = envV.GetGlobalScope();
-        
-        // Check current scope
-        foreach (KeyValuePair<string, TypeT> pair in globalScope.V) {
-            //Pattern match on those elements of resource types, add the 
-            if (pair.Value is ResourceT resource && envH.IsSubtype(resource, category)) {
-                resourceIds.Add(pair.Key);
-            }
-        }
-
-        return resourceIds;
     }
 }
