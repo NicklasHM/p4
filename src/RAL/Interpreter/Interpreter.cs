@@ -1,3 +1,4 @@
+using System.Reflection.Metadata;
 using RAL.AST;
 
 namespace RAL.Interpreter;
@@ -20,22 +21,25 @@ Runtime checks are still used for cases such as division by zero.
 public class Interpreter {
     private const float Epsilon = 0.00001f;
 
+    //Evaluates a statement with pattern matching on the AST nodes
+
     public static void EvalStmt(Stmt stmt)
     {
         switch(stmt)
-        {
+        {   case Skip: break;
+           
+            case Composite c: HandleComposite(c); break;
+           
+            case If i: HandleIf(i); break;
+
+            case VarDecl vd: HandleVarDecl(vd); break;
+
             case ExpStmt s: Console.WriteLine(EvalExp(s.Expression)); break;
-
-            case Composite c: {
-                if(c.Stmt1 != null) EvalStmt(c.Stmt1);
-                if(c.Stmt2 != null) EvalStmt(c.Stmt2);
-                break;
-            }
-
-            default: throw new Exception($"Unknown statement.");
+            default: throw new Exception($"Unknown Statement:" + stmt.ToString());
         }
     }
 
+    //Evaluates and returns an expression. Pattern matching on the AST nodes
     public static Value EvalExp(Exp exp) {
         return exp switch {
             NumberV n => new NumberVal(n.Value),
@@ -51,19 +55,32 @@ public class Interpreter {
         };
     }
 
-    static private Value EvalUnary(UnaryOperation exp) {
-        Value value = EvalExp(exp.Expression);
-
-        return exp.Operator switch {
-            UnaryOperator.NOT when value is BoolVal b
-                => new BoolVal(!b.Value),
-            
-            UnaryOperator.NEG when value is NumberVal n
-                => new NumberVal(-n.Value),
-
-            _ => throw new Exception($"Line {exp.LineNumber}: Invalid unary operation.")
-        };
+    /* ________________________Statement Handlers______________________________*/
+    
+    static private void HandleComposite (Composite c) {
+        // Evaluates left subtree first
+        if(c.Stmt1 != null) EvalStmt(c.Stmt1);
+        // Right subtree
+        if(c.Stmt2 != null) EvalStmt(c.Stmt2);        
     }
+
+    static private void HandleIf(If ifNode) {
+        //Evaluate condition to interpreter values
+        Value condition = EvalExp(ifNode.Condition);
+
+        //Downcast and extract bool value, guarenteed by typechecking. Bodies will be skip
+        if (condition.AsBool())
+            EvalStmt(ifNode.ThenBody); //will be skip if empty {}
+        else 
+            EvalStmt(ifNode.ElseBody); //will be skip if excluded or empty {}
+    }
+
+    static private void HandleVarDecl(VarDecl vdNode) {
+
+                
+    }
+
+    /*_____________________Expression Handlers_____________________*/
 
     static private Value EvalBinary(BinaryOperation exp) {
         Value left = EvalExp(exp.LeftExpression);
@@ -200,6 +217,23 @@ public class Interpreter {
             _ => throw new Exception($"Line {exp.LineNumber}: Invalid binary operation.")
         };
     }
+
+    static private Value EvalUnary(UnaryOperation exp) {
+
+        //Evaluate inner expression
+        Value value = EvalExp(exp.Expression);
+
+        return exp.Operator switch {
+            UnaryOperator.NOT when value is BoolVal b
+                => new BoolVal(!b.Value),
+            
+            UnaryOperator.NEG when value is NumberVal n
+                => new NumberVal(-n.Value),
+
+            _ => throw new Exception($"Line {exp.LineNumber}: Invalid unary operation.")
+        };
+    }
+
 
     private static NumberVal DivideNumbers(NumberVal left, NumberVal right, int lineNumber) {
         CheckDivisionByZero(right.Value, lineNumber);
