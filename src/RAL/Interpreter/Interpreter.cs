@@ -1,4 +1,3 @@
-using System.Reflection.Metadata;
 using RAL.AST;
 
 namespace RAL.Interpreter;
@@ -214,7 +213,7 @@ public class Interpreter {
 
             // Reserve and seq
 
-            _ => throw new Exception($"Line {exp.LineNumber}: Invalid binary operation.")
+            _ => throw new Exception($"Line {exp.LineNumber}: Invalid binary operation.") // Should never happen
         };
     }
 
@@ -230,7 +229,7 @@ public class Interpreter {
             UnaryOperator.NEG when value is NumberVal n
                 => new NumberVal(-n.Value),
 
-            _ => throw new Exception($"Line {exp.LineNumber}: Invalid unary operation.")
+            _ => throw new Exception($"Line {exp.LineNumber}: Invalid unary operation.") // Should never happen
         };
     }
 

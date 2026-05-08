@@ -241,10 +241,10 @@ PRODUCTIONS
   .
 
   TemplateDecl<out Stmt stmt> = 
-    "template"                  (. int lineNumber = t.line; List<VarDecl>? paramList = null; .)
+    "template"                  (. int lineNumber = t.line; List<VarDecl> paramList = new(); .)
     ident                       (. string templateId = t.val; .)
     "(" 
-    [                              (. paramList = new List<VarDecl>(); .)
+    [                              
       Param<out VarDecl param>     (. paramList.Add(param);.)
       { ","                    
         Param<out VarDecl nextParam> (. paramList.Add(nextParam); .)
@@ -356,9 +356,9 @@ PRODUCTIONS
   /* Template invocation, argList is null unless arguments have been provided */
   TemplateCall<out Stmt stmt> =
     "use"                     (. int lineNumber = t.line; .)
-    ident                     (. string templateId = t.val; List<Exp>? argList = null; .)
+    ident                     (. string templateId = t.val; List<Exp> argList = new(); .)
     "("
-    [                         (. argList = new List<Exp>(); .)
+    [                         
       Exp<out Exp arg>        (. argList.Add(arg);.)
       { "," 
         Exp<out Exp nextArg>  (. argList.Add(nextArg);.)
@@ -449,100 +449,40 @@ PRODUCTIONS
     .
 
   /*alternative that does not enforce unit structure/repetition = number Unit {number Unit} */
-  /* number, not expression. Would give lookahead problem otherwise 
-  DurationRefactored<out Exp exp> (. exp = null; int days = 0, hours = 0, minutes = 0; .) =
+  /* number, not expression. Would give lookahead problem otherwise */
+  Duration<out Exp exp> (. exp = null; int days = 0, hours = 0, minutes = 0; .) =
     
-      (
+    (
       IF(FollowedByWeek()) number (. days = int.Parse(t.val) * 7; .) ("w" | "week" | "weeks")
       [ 
-        number (. days += int.Parse(t.val); .) ("d" | "day" | "days") 
+        IF(FollowedByDay()) number (. days += int.Parse(t.val); .) ("d" | "day" | "days") 
       ]
       [ 
-        number (. hours = int.Parse(t.val); .) ("h" | "hour" | "hours") 
+        IF(FollowedByHour()) number (. hours = int.Parse(t.val); .) ("h" | "hour" | "hours") 
       ]
       [ 
         number (. minutes = int.Parse(t.val); .) ("m" | "minute" | "minutes") 
       ]
 
-    | IF(FollowedByDay())
-      number (. days = int.Parse(t.val); .) ("d" | "day" | "days")
+    | 
+      IF(FollowedByDay()) number (. days = int.Parse(t.val); .) ("d" | "day" | "days")
       [ 
-        number (. hours = int.Parse(t.val); .) ("h" | "hour" | "hours") 
+       IF(FollowedByHour()) number (. hours = int.Parse(t.val); .) ("h" | "hour" | "hours") 
       ]
       [ 
-        number (. minutes = int.Parse(t.val); .) 
-      ("m" | "minute" | "minutes") ]
+        number (. minutes = int.Parse(t.val); .) ("m" | "minute" | "minutes") 
+      ]
 
-    | IF(FollowedByHour())
-      number (. hours = int.Parse(t.val); .)
-      ("h" | "hour" | "hours")
-      [ number (. minutes = int.Parse(t.val); .) 
-      ("m" | "minute" | "minutes") ]
+    | 
+      IF(FollowedByHour()) number (. hours = int.Parse(t.val); .) ("h" | "hour" | "hours")
+      [ number (. minutes = int.Parse(t.val); .) ("m" | "minute" | "minutes") ]
 
-    | number (. minutes = int.Parse(t.val); .)
-      ("m" | "minute" | "minutes")
+    | 
+      number (. minutes = int.Parse(t.val); .) ("m" | "minute" | "minutes")
     )
 
     (. exp = new DurationV(t.line, new TimeSpan(days, hours, minutes, 0)); .)
-  .*/
-
-/** to use
-  Duration<out Exp exp> (. exp = null; int days = 0, hours = 0, minutes = 0; .) =
-    
-    Weeks | Days | Hours | Minutes 
-      
-      (. exp = new DurationV(t.line, new TimeSpan(days, hours, minutes, 0)); .)
-    .
-
-  Weeks<out int days> =
-    IF(FollowedByWeek()) number (. days = int.Parse(t.val) * 7; .) ("w" | "week" | "weeks") [Days]
   .
-
-  Days<out int days> = 
-    IF(FollowedByDay()) number (. days = int.Parse(t.val); .) ("d" | "day" | "days") [Hours]
-  .
-
-  Hours<out int hours> = 
-    IF(FollowedByHour())  number (. hours = int.Parse(t.val); .) ("h" | "hour" | "hours") [Minutes]
-  .
-
-  Minutes<out int minutes> =
-     number (. minutes = int.Parse(t.val); .) ("m" | "minute" | "minutes")
-  .
-*/
-  Duration<out Exp exp> (. exp = null; int weeks = 0, days = 0, hours = 0, minutes = 0; .)
-    =
-    ((
-      IF(FollowedByWeek())
-      number                        (. weeks = int.Parse(t.val); .)
-      ("w" | "week" | "weeks")
-
-    | IF(FollowedByDay())
-      number                        (. days = int.Parse(t.val); .)
-      ("d" | "day" | "days")
-
-    | IF(FollowedByHour())
-      number                        (. hours = int.Parse(t.val); .)
-      ("h" | "hour" | "hours")
-
-    | number                        (. minutes = int.Parse(t.val); .)
-      ("m" | "minute" | "minutes")
-    )
-
-    [ IF(FollowedByDay())
-      number                        (. days = int.Parse(t.val); .)
-      ("d" | "day" | "days") ]
-
-    [ IF(FollowedByHour())
-      number                        (. hours = int.Parse(t.val); .)
-      ("h" | "hour" | "hours") ]
-
-    [ 
-      number                        (. minutes = int.Parse(t.val); .)
-      ("m" | "minute" | "minutes") ]
-    )
-    (. exp = new DurationV(t.line, new TimeSpan(days + weeks * 7, hours, minutes, 0)); .)
-    .
 
                    
   Recurrence<out RecurrenceSpec recurrence> = //assigning default to bypass unassigned local variable error in parser  

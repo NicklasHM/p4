@@ -279,7 +279,7 @@ public class AstTraversalTests
         var c3 = Assert.IsType<Composite>(c2.Stmt2);
         var move = Assert.IsType<Move>(c3.Stmt2);
         Assert.Equal("myRoom", move.ResourceId);
-        Assert.Equal("Suite",  move.CategoryId);
+        Assert.Equal(new ResourceT("Suite"),  move.Type);
     }
 
     [Fact]

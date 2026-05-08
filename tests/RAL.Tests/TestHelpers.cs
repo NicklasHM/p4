@@ -97,7 +97,7 @@ static class TestHelpers
     public static TypeChecker RunTypeChecker(Stmt node)
     {
         var tc = new TypeChecker();
-        tc.StmtType(node, new EnvV(), new EnvC(), new EnvH(), new EnvT(), new EnvR());
+        tc.StmtType(node, new EnvV(), new EnvC(), new EnvH(), new EnvT(), new EnvR(), new EnvCPT());
         return tc;
     }
 
