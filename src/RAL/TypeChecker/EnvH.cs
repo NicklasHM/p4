@@ -25,19 +25,14 @@ public class EnvH {
 
 
     public void EstablishRelation(ResourceT childCat, ResourceT parentCat) {
-        if(childCat == parentCat) throw new Exception("A category may not relate to itself");
+        // needs to be exception, otherwise lookups may enter infinite loop
+        if(childCat == parentCat) throw new Exception("A category may not relate to itself"); 
         parentCatRelations[childCat] = parentCat;
     } 
 
 /// <summary> Under valid input, guarentees parentCat. Nullable due to 'Resource' having no parentCat. Otherwise, throws exception <summary>
-    public ResourceT? GetParent (ResourceT childCat) {
-        
-        //Guard invalid childCat input. tryGetValue returns false if dictionary did not contain key 'childCat', parentCat would be null
-        if (parentCatRelations.TryGetValue(childCat, out ResourceT parentCat) == false)
-            throw new Exception("Invalid childCat argument to GetparentCat");
-       
-       //childCat input valid. 'parentCat' contains value at key 'childCat'
-        return parentCat;
+    public bool TryGetParent(ResourceT childCat, out ResourceT? parent) {
+        return parentCatRelations.TryGetValue(childCat, out parent);
     }
 
     //Returns a 'list' of all immediate children categories
@@ -46,14 +41,18 @@ public class EnvH {
         .Where(kvp => kvp.Value == category)
         .Select(kvp => kvp.Key);
 
-     public IEnumerable<ResourceT> GetAllRelated(ResourceT category) {
+     public IEnumerable<ResourceT>? GetAllRelated(ResourceT category) {
         var result = new HashSet<ResourceT>();
 
         //Upwards
         ResourceT? current = category;
         while (current != null) {
             result.Add(current);
-            current = GetParent(current);
+            if (!TryGetParent(current, out ResourceT? parent)) {
+                return null;
+            }
+
+            current = parent;
         }
 
         //Downwards

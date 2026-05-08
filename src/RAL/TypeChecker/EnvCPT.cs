@@ -1,6 +1,4 @@
 namespace RAL.TC;
-
-using System.Diagnostics.Metrics;
 using RAL.AST;
 
 //// <summary> categoryId x propertyId -> type. 
@@ -44,8 +42,7 @@ public class EnvCPT {
     }
 
         /// <summary> Returns inner map of categoryId, throws exception if not registered </summary>
-    public Dictionary<string, TypeT> GetPropertyTypeMap (string categoryId)
-    {
+    public Dictionary<string, TypeT> GetPropertyTypeMap (string categoryId) {
         //Guard invalid categoryId. tryGetValue returns false if dictionary did not contain key 'categoryId'.
         if(CPT.TryGetValue(categoryId, out Dictionary<string, TypeT> propertyTypeMap) == false) {
             throw new Exception($"Invalid categoryId: '{categoryId}' argument!");
@@ -60,8 +57,7 @@ public class EnvCPT {
         return HasCategory(categoryId) && GetPropertyTypeMap(categoryId).ContainsKey(propertyId);
     }
 
-    public bool HasCategory(string categoryId)
-    {
+    public bool HasCategory(string categoryId) {
         return CPT.ContainsKey(categoryId); 
     
     }

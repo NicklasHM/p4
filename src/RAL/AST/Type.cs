@@ -18,4 +18,6 @@ public sealed record DurationT : TypeT { public override string ToString() { ret
 
 public sealed record DateTimeT : TypeT { public override string ToString() { return "Datetime"; }}
 
+public sealed record ErrorT(string Msg) : TypeT { public override string ToString() { return this.Msg; }};
+
 public sealed record CategoryT : TypeT { public override string ToString() { return "category"; }} // delete?

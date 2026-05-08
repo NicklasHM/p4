@@ -15,32 +15,32 @@ public class EnvV {
         return new EnvV(this);
     }
 
-    public void Bind(string var, TypeT type) {
+    public bool Bind(string var, TypeT type) {
         if (V.ContainsKey(var)) {
-            throw new Exception($"Variable '{var}' already declared in current scope.");
+            return false;
         }
 
-        V[var] = type;
-
-        Console.WriteLine("EnvV Binding " + var + " to: " + V[var] + "\n");
+        V.Add(var, type);
+        return true;
     }
 
-    public void ChangeCategory(string var, TypeT type) {
+    public bool ChangeCategory(string var, TypeT type) {
         if (V.ContainsKey(var)) {
             V[var] = type;
+            return true;
         } else {
-            throw new Exception($"Use of undeclared variable: '{var}'.");
+            return false;
         }
     }
 
-    public TypeT Lookup(string var) {
+    public TypeT? Lookup(string var) {
         if (V.TryGetValue(var, out TypeT type)) 
             return type;
 
         if (parent != null) 
             return parent.Lookup(var);
         
-        throw new Exception($"Use of undeclared variable: '{var}'.");
+        return null;
     }
 
     // unneeded

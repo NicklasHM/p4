@@ -28,32 +28,31 @@ public class EnvR {
     }
 
     /// <summary> Associates a resource </summary> 
-    public void BindField(string resourceId, string fieldId, TypeT type) {
+    public bool BindField(string resourceId, string fieldId, TypeT type) {
   
         //Retrieve the relevant resource's field environment (nest)
         Dictionary<string, TypeT> fieldEnvironment = R[resourceId];
 
         //Guard against the resource containing duplicate field id's
         if (fieldEnvironment.ContainsKey(fieldId))
-            throw new Exception($"Field '{fieldId}' is already defined in resource '{resourceId}'.");
+            return false;
 
         //Bind type to field
         fieldEnvironment.Add(fieldId, type);
-
-        Console.WriteLine("EnvR Binding " + resourceId + "," + fieldId + "->"+ type + "\n");
+        return true;
     }
 
-    public TypeT LookupField(string resourceId, string fieldName) {
+    public TypeT? LookupField(string resourceId, string fieldName) {
 
         // Check if the resource has been declared. If it has, return it's inner dictionary mapping field -> type
         if (!R.TryGetValue(resourceId, out Dictionary<string, TypeT> fieldEnvironment)) 
-            throw new Exception($"Unknown resource '{resourceId}'.");
+            return null;
 
         // Do a lookup in the inner dictionary, getting the type of the field
         if (fieldEnvironment.TryGetValue(fieldName, out TypeT fieldType)) 
             return fieldType;
 
-        throw new Exception($"Unknown field '{fieldName}' in resource '{resourceId}'.");
+        return null;
     }
 
      /// <summary> Returns inner map of categoryId, throws exception if not registered </summary>

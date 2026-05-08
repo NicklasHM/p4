@@ -5,19 +5,20 @@ using RAL.AST;
 public class EnvT {
     private readonly Dictionary<string, List<TypeT>> T = new();
 
-    public void Bind(string var, List<TypeT> types) {
+    public bool Bind(string var, List<TypeT> types) {
         if (T.ContainsKey(var)) {
-            throw new Exception($"Template '{var}' already declared.");
+            return false;
         }
 
-        T[var] = types;
+        T.Add(var, types);
+        return true;
     }
 
-    public List<TypeT> Lookup(string var) {
+    public List<TypeT>? Lookup(string var) {
         if (T.TryGetValue(var, out List<TypeT> types)) {
             return types;
         } else {
-            throw new Exception($"Use of undeclared template: '{var}'.");
+            return null;
         }
     }
 }
