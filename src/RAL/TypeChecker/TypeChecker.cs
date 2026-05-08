@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using RAL.AST;
 using RAL.Interpreter;
 namespace RAL.TC;
@@ -62,7 +63,7 @@ class TypeChecker {
             UnaryOperation u => HandleUnary(u, envV, envC, envH, envT, envR, envCPT),
 
 
-            _ => throw new Exception($"Unknown {exp.LineNumber} expression.") // should never happen
+            _ => throw new Exception($"Unknown expression.") // should never happen
         };
 
 /* ________________________Statement Handlers______________________________*/
@@ -82,19 +83,19 @@ class TypeChecker {
 
     private void HandleVarDecl(VarDecl decl, EnvV envV, EnvC envC) {
         if(decl.Type is ResourceT r && !envC.CategoryIsDeclared(r.Category))
-            throw new Exception($"Use of undeclared category '{r.ToString()}'.");
+            errors.Add($"Use of undeclared category '{r.ToString()}'.");
    
-        envV.Bind(decl.Identifier, decl.Type);
+        bool bound = envV.Bind(decl.Identifier, decl.Type);
+        if(!bound) errors.Add($"Variable '{decl.Identifier}' already declared in current scope.");
     }
 
 
     private void HandleCategoryDecl(CategoryDecl cd, EnvC envC, EnvH envH) {
-        //Ensure id is not already in the set of categories
-        if(envC.CategoryIsDeclared(cd.CategoryId))
-            errors.Add($"Category '{cd.CategoryId}' has already been declared.");
 
-        //Add the new category to the set
-        envC.AddCategory(cd.CategoryId);
+        // Add the new category to the set; function returns bool indicating whether category has already been declared
+        if(envC.AddCategory(cd.CategoryId) == false) {
+            errors.Add($"Category '{cd.CategoryId}' has already been declared.");
+        }
 
         //Handle relation to parent - 'is a id' part of [category id is a id]. If no relation is explicitly provided, parent is 'Resource'
         if(cd.ParentId == null) {
@@ -103,7 +104,7 @@ class TypeChecker {
             
             //Ensure parent is in the set of categories
             if(!envC.CategoryIsDeclared(cd.ParentId)) 
-                throw new Exception($"Use of undeclared category '{cd.ParentId}'.");
+                errors.Add($"Use of undeclared category '{cd.ParentId}'.");
 
             //Delegate establishment of parent relation to hierarchy environment. Guards cyclic relations
             envH.EstablishRelation(new ResourceT(cd.CategoryId), new ResourceT(cd.ParentId)); 
@@ -118,7 +119,8 @@ class TypeChecker {
         else if(!envC.CategoryIsDeclared(r.Category))
             errors.Add($"Use of undeclared category '{r.Category}'");
         
-        envV.Bind(resDecl.Identifier, resDecl.Type); // bind resource to variable environment
+        bool bound = envV.Bind(resDecl.Identifier, resDecl.Type); // bind resource to variable environment
+        if(!bound) errors.Add($"Variable '{resDecl.Identifier}' already declared in current scope.");
 
         envR.RegisterResource(resDecl.Identifier); // Invariant: All resources must be registered in resource environment, important for property checking
 
@@ -153,13 +155,14 @@ class TypeChecker {
         } else {
 
             //A new scope is passed so within the resource envV is used as lookup, when assigning
-            if(withAssignment)
-            {
-                envV.Bind(varDecl.Identifier, varDecl.Type);  
+            if(withAssignment) {
+                bool bound = envV.Bind(varDecl.Identifier, varDecl.Type);  
+                if(!bound) errors.Add($"Variable '{varDecl.Identifier}' already declared in current scope.");
             }
 
             //For use outside resource
-            envR.BindField(resDecl.Identifier, varDecl.Identifier, varDecl.Type);
+            bool boundR = envR.BindField(resDecl.Identifier, varDecl.Identifier, varDecl.Type);
+            if(!boundR) errors.Add($"Property '{varDecl.Identifier}' has already been declared.");
 
              //
             CheckCategoryPropertyConflict(resDecl.Type, varDecl.Identifier, varDecl.Type, envH, envCPT);
@@ -169,14 +172,20 @@ class TypeChecker {
 
      private void CheckCategoryPropertyConflict(ResourceT resDeclType, string propertyId, TypeT incomingType, EnvH envH, EnvCPT envCPT) {
 
+        IEnumerable<ResourceT>? relatedList = envH.GetAllRelated(resDeclType);
 
-        foreach (ResourceT related in envH.GetAllRelated(resDeclType))
-        {
+        if(relatedList == null) {
+            errors.Add($"Use of undeclared category '{resDeclType.Category}'"); // message WIP
+            return;
+        }
+
+        foreach (ResourceT related in relatedList) {
             //Case 1: the property does not exist within current category
             if (!envCPT.HasProperty(related.Category, propertyId))
                  continue; //Skips rest of loop
             
             //Case 2: If this is reached. 2 The proper propertyId within category is of a different type than the declaration: Ok
+            // No need to guard against failed lookup; will never fail given the property check above
             TypeT existingType = envCPT.Lookup(related.Category, propertyId);
 
             //2-fail: propertyId within category is of a different type than the declaration: Ok
@@ -188,14 +197,15 @@ class TypeChecker {
                 );
             }
                 
-            return; // found in tree — consistent or error logged; do not bind again
+            return; // found in tree, consistent or error logged; do not bind again
         }
-         //2.Success New to entire tree — register it
+         // 2.Success New to entire tree, register it
+         // No need to guard against failed bind; will never reach here if it is already bounded given the above return
         envCPT.Bind(resDeclType.Category, propertyId, incomingType);
      }
 
     private void HandleTemplateDecl(TemplateDecl tmplDecl, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
-        if(tmplDecl.ParamList == null) return; // possible problems in template lookup due to null pointer dereference?
+        if(tmplDecl.ParamList == null) return;
 
         EnvV tmplScope = envV.NewScope();
         List<TypeT> paramTypes = new();
@@ -204,14 +214,15 @@ class TypeChecker {
             paramTypes.Add(param.Type); // extract types from param list and add to template environment
             tmplScope.Bind(param.Identifier, param.Type); // make formal parameters accessible (only) in template body
         }
-        envT.Bind(tmplDecl.TemplateId, paramTypes); // bind template id to formal param types
+        bool bound = envT.Bind(tmplDecl.TemplateId, paramTypes); // bind template id to formal param types
+        if(!bound) errors.Add($"Template '{tmplDecl.TemplateId}' already declared.");
 
         if(tmplDecl.TemplateBody != null) 
             StmtType(tmplDecl.TemplateBody, tmplScope, envC, envH, envT, envR, envCPT); // type check body. 
     }
 
     private void HandleTemplateCall(TemplateCall tc, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
-        List<TypeT> formalParamTypes = envT.Lookup(tc.TemplateId);
+        List<TypeT>? formalParamTypes = envT.Lookup(tc.TemplateId);
 
         if(formalParamTypes == null && tc.ArgList == null) return; // both lists are empty; illtyping is impossible
 
@@ -242,12 +253,13 @@ class TypeChecker {
     private void HandleMove(Move move, EnvV envV, EnvC envC, EnvH envH ,EnvR envR, EnvCPT envCPT) {
 
         // Ensure id to move maps to a resource. V(r) = Resource. 
-        TypeT type = envV.Lookup(move.ResourceId);
+        TypeT? type = envV.Lookup(move.ResourceId);
+        if(type == null) errors.Add($"Use of undeclared variable '{move.ResourceId}'.");
         if(type is ResourceT) {
 
             //Ensure id of category maps to a category
             if(!envC.CategoryIsDeclared(move.Type.Category)) 
-                throw new Exception($"Use of undeclared category '{move.Type.Category}'.");
+                errors.Add($"Use of undeclared category '{move.Type.Category}'.");
             
             //Before moving check for conflicts between the resource's property types and those of the category
             Dictionary<string, TypeT> propertyTypeMap = envR.GetPropertyTypeMap(move.ResourceId);
@@ -258,7 +270,9 @@ class TypeChecker {
             }
 
             //Currently moving wether or not conflicts occur
-            envV.ChangeCategory(move.ResourceId, new ResourceT(move.Type.Category));
+            if(envV.ChangeCategory(move.ResourceId, new ResourceT(move.Type.Category)) == false) {
+                errors.Add($"Use of undeclared variable: '{move.ResourceId}'.");
+            }
 
         } else 
             errors.Add($"Expected type 'Resource' got '{type.ToString()}'");
@@ -312,13 +326,16 @@ class TypeChecker {
                 }
 
                 if (resourceSpec.Identifier != null) {
-                    envV.Bind(resourceSpec.Identifier, new ResourceT(resourceSpec.CategoryId));
+                    bool bound = envV.Bind(resourceSpec.Identifier, new ResourceT(resourceSpec.CategoryId));
+                    if(!bound) errors.Add($"Variable '{resourceSpec.Identifier}' already declared in current scope.");
                 }
             }
 
             // "id"
             else if (resourceSpec.Identifier != null && resourceSpec.Quantity == null) {
-                if (envV.Lookup(resourceSpec.Identifier) is not ResourceT) {
+                TypeT? type = envV.Lookup(resourceSpec.Identifier);
+                if(type == null) errors.Add($"Use of undeclared variable '{resourceSpec.Identifier}'");
+                if (type is not ResourceT) {
                     errors.Add($"Expected type 'Resource' got '{resourceSpec.Identifier}'");
                     isWellTyped = false;
                 }
@@ -340,7 +357,7 @@ class TypeChecker {
         return (fromType, toType) switch {
             (DateTimeT, DateTimeT) => true, // dt to dt
             (DateTimeT, DurationT) => true, // dt for dur
-            _  => Error($"Types {fromType.ToString()} and {toType.ToString()} incompatible with interval expression")
+            _  => Error($"Types {fromType.ToString()} and {toType.ToString()} incompatible with interval expression", false)
         };
     }
 
@@ -350,7 +367,7 @@ class TypeChecker {
         TypeT condType = ExpType(condition, envV, envC, envH, envT, envR, envCPT);
         return condType switch {
             BoolT => true,
-            _  => Error($"Condition expected type 'bool' got '{condType.ToString()}'")
+            _  => Error($"Condition expected type 'bool' got '{condType.ToString()}'", false)
         };
     }
 
@@ -362,7 +379,7 @@ class TypeChecker {
         return (everyType, endType) switch {
             (DurationT, DateTimeT) => true, // needs way to distinguish between for/until
             (DurationT, DurationT) => true,
-            _  => Error($"Types '{everyType.ToString()}' and '{endType.ToString()}' incompatible for recurrence.")       
+            _  => Error($"Types '{everyType.ToString()}' and '{endType.ToString()}' incompatible for recurrence.", false)       
         };
     }    
     
@@ -383,7 +400,9 @@ class TypeChecker {
     {
         //id case
         if (referenceNode.PropertyId == null) {
-            return envV.Lookup(referenceNode.VariableId);
+            TypeT? type = envV.Lookup(referenceNode.VariableId);
+            if(type == null) return Error($"Use of undeclared variable '{referenceNode.VariableId}'.");
+            return type;
         }
         //id.id case   
         else {
@@ -394,17 +413,20 @@ class TypeChecker {
     private TypeT HandlePropertyReference(Reference reference, EnvV envV, EnvH envH, EnvR envR, EnvCPT envCPT) {
         
         //Guard: Ensure that the variable is a resource type. Only these should allow property access.
-        TypeT varType = envV.Lookup(reference.VariableId);
+        TypeT? varType = envV.Lookup(reference.VariableId);
+        if(varType == null) return Error($"Use of undeclared variable '{reference.VariableId}'.");
  
         if (varType is not ResourceT resource) {
-            return Error($"Cannot access property '{reference.PropertyId}' on non-resource '{reference.VariableId}'.", new BoolT());
+            return Error($"Cannot access property '{reference.PropertyId}' on non-resource '{reference.VariableId}'.");
         }
 
         // Case 1: Declared resources. Upon declaration, reglardless of having fields, a resource is registered to envR.
         if (envR.HasResource(reference.VariableId)) {
 
             // id.id cases.'PropertyId' can never be null given case from which this method is invoked in HandleReference
-            return envR.LookupField(reference.VariableId, reference.PropertyId);
+            TypeT? type = envR.LookupField(reference.VariableId, reference.PropertyId);
+            if(type == null) return Error($"Property '{reference.PropertyId}' doesn't exist in resource '{reference.VariableId}'");
+            return type;
         }
 
         // Case 2: Does not exist in resource environment -> Bounded query variable. Check envCPT categoryId x propertyId -> Type
@@ -422,17 +444,15 @@ class TypeChecker {
             }
         }
 
-        return Error(
-            $"No resource in the category tree of '{category.Category}' " +
-            $"declares a field '{propertyId}'.",
-            new BoolT()
-        );
+        return Error($"No resource in the category tree of '{category.Category}' declares a field '{propertyId}'.");
     }
 
      private TypeT HandleAssignment(Assignment assign, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         TypeT varType = HandleReference(assign.Variable, envV, envH, envR, envCPT);
-
         TypeT expType = ExpType(assign.Value, envV, envC, envH, envT, envR, envCPT);
+
+        if (varType is ErrorT) return varType;
+        if (expType is ErrorT) return expType;
         
         if (varType is ResourceT) 
             errors.Add($"Assignment of expression to resource not allowed");
@@ -450,17 +470,22 @@ class TypeChecker {
         TimeSpecIsWellTyped(r.NewTimeInterval, envV, envC, envH, envT, envR, envCPT); // Simply checks for errors in the [dt to dt / for dur]. Return value is discarded
 
         TypeT expType = ExpType(r.Reservation, envV, envC, envH, envT, envR, envCPT);
+
+        if (expType is ErrorT) return expType;
+
+        if(expType is ReservationT) return new ReservationT();
+        return Error($"Reschedule expected type 'Reservation' got '{expType}'");
         
-        return expType switch {
-            ReservationT => new ReservationT(),
-            _ => Error($"Reschedule expected type 'Reservation' got '{expType}'", new ReservationT())
-        };
     }
 
     private TypeT HandleBinary(BinaryOperation exp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         
         TypeT left  = ExpType(exp.LeftExpression,  envV, envC, envH, envT, envR, envCPT);
         TypeT right = ExpType(exp.RightExpression, envV, envC, envH, envT, envR, envCPT);
+
+        // Propegate error upwards
+        if (left is ErrorT) return left;
+        if (right is ErrorT) return right;
         
         string operatorAsString = EnumToOp(exp.Operator);
         return exp.Operator switch
@@ -470,13 +495,13 @@ class TypeChecker {
             BinaryOperator.SUB => (left, right) switch {
                 (NumberT, NumberT)     => new NumberT(),   // num + num
                 (DateTimeT, DurationT) => new DateTimeT(), // dt + dur
-                _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new NumberT())},
+                _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
 
             // * /
             BinaryOperator.MUL or 
             BinaryOperator.DIV => (left, right) switch {
                 (NumberT, NumberT) => new NumberT(), // num */ num
-                _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new NumberT())},
+                _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
             
             // <, >, 
             BinaryOperator.LT   or // <
@@ -486,7 +511,7 @@ class TypeChecker {
                 (NumberT, NumberT) => new BoolT(),
                 (DateTimeT, DateTimeT) => new BoolT(),
                 (DurationT, DurationT) => new BoolT(),
-                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new BoolT())},
+                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
 
             BinaryOperator.EQ or 
             BinaryOperator.NEQ => (left, right) switch {
@@ -495,16 +520,16 @@ class TypeChecker {
                 (NumberT, NumberT) => new BoolT(),
                 (DurationT, DurationT) => new BoolT(),
                 (DateTimeT, DateTimeT) => new BoolT(),
-                _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new BoolT())},
+                _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
 
             BinaryOperator.OR or BinaryOperator.AND => (left, right) switch {
                 (ReservationT, ReservationT) => new ReservationT(), // reserve [...] and reserve [...]
                 (BoolT, BoolT)               => new BoolT(),        // 4 < 7 and 7 < 11
-                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new ReservationT())},
+                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
 
             BinaryOperator.SEQ => (left, right) switch {
                 (ReservationT, ReservationT) => new ReservationT(),
-                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'", new ReservationT())},
+                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
 
             _ => throw new Exception("Unknown binary operator.") // should never happen      
         };
@@ -512,13 +537,16 @@ class TypeChecker {
 
     private TypeT HandleUnary(UnaryOperation exp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         TypeT operandType = ExpType(exp.Expression, envV, envC, envH, envT, envR, envCPT);
+
+        if (operandType is ErrorT) return operandType;
+
         string operatorAsString = EnumToOp(exp.Operator);
         return exp.Operator switch {
             UnaryOperator.NOT when (operandType is BoolT) => new BoolT(),
-            UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected 'Bool' got '{operandType}'", new BoolT()),
+            UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected 'Bool' got '{operandType}'"),
 
             UnaryOperator.NEG when (operandType is NumberT) => new NumberT(),
-            UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected 'Number' got '{operandType}'", new NumberT()),
+            UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected 'Number' got '{operandType}'"),
             
             _ => throw new Exception("Unknown unary operator.") // should never happen
         };
@@ -527,14 +555,14 @@ class TypeChecker {
     /* ____________________________Errors and message helpers____________________________*/
 
      // Below two error functions are simply to circumvent switch expression limitations of not being able to add statements
-    private bool Error(string msg) {
+    private bool Error(string msg, bool value) {
         errors.Add(msg);
-        return false;
+        return value;
     }
 
-    private TypeT Error(string msg, TypeT fallback) {
+    private ErrorT Error(string msg) {
         errors.Add(msg);
-        return fallback;
+        return new ErrorT(msg);
     }
 
     private string EnumToOp(BinaryOperator op) {
