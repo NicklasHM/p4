@@ -15,10 +15,7 @@ p4/
 │       ├──  AST
 │       └──  Interpreter
 ├── tests/
-│   ├── parser/
-│   ├── typechecker/
-│   ├── semantics/
-│   └── integration/
+│   └── RAL.Tests/        ← xUnit test project
 
 ```
 
@@ -47,11 +44,10 @@ cd CocoR
 
 This generates `Scanner.cs` and `Parser.cs` directly into `src/RAL/Generated/`.
 
-### Running a RAL Program
+### Running all tests
 
 ```bash
-cd src/RAL
-dotnet run -- ../../tests/parser/valid/yourfile.ra
+dotnet test 
 ```
 
 ## Example
