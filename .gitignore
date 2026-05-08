@@ -36,3 +36,4 @@ desktop.ini
 *.tmp
 *.temp
 src/RAL/testing.ral
+src/RAL/test.ral

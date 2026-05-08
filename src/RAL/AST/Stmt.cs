@@ -18,7 +18,7 @@ record class ResourceDecl(int LineNumber, ResourceT Type, string Identifier, Lis
 
 record class CategoryDecl (int LineNumber, string CategoryId, string? ParentId) : Stmt(LineNumber);
 
-record class TemplateDecl(int LineNumber, string TemplateId, List<VarDecl>? ParamList, Stmt? TemplateBody) : Stmt(LineNumber);
+record class TemplateDecl(int LineNumber, string TemplateId, List<VarDecl> ParamList, Stmt? TemplateBody) : Stmt(LineNumber);
 
 record class Move(int LineNumber, string ResourceId, ResourceT Type ) : Stmt(LineNumber);
 
@@ -31,6 +31,6 @@ record class ExpStmt(int LineNumber, Exp Expression) : Stmt(LineNumber);
 
 record class Availability(int LineNumber, QueryData Query) : Stmt(LineNumber);
 
-record class TemplateCall(int LineNumber, string TemplateId, List<Exp>? ArgList) : Stmt(LineNumber);
+record class TemplateCall(int LineNumber, string TemplateId, List<Exp> ArgList) : Stmt(LineNumber);
 
 record class Skip(int LineNumber) : Stmt(LineNumber);

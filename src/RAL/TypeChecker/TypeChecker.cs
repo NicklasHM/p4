@@ -205,7 +205,6 @@ class TypeChecker {
      }
 
     private void HandleTemplateDecl(TemplateDecl tmplDecl, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
-        if(tmplDecl.ParamList == null) return;
 
         EnvV tmplScope = envV.NewScope();
         List<TypeT> paramTypes = new();
@@ -222,18 +221,13 @@ class TypeChecker {
     }
 
     private void HandleTemplateCall(TemplateCall tc, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
-        List<TypeT>? formalParamTypes = envT.Lookup(tc.TemplateId);
+        List<TypeT> formalParamTypes = envT.Lookup(tc.TemplateId);
 
-        if(formalParamTypes == null && tc.ArgList == null) return; // both lists are empty; illtyping is impossible
-
-        if(formalParamTypes != null && tc.ArgList == null || 
-           formalParamTypes == null && tc.ArgList != null ||
-           formalParamTypes.Count != tc.ArgList.Count) { // XOR?
-            errors.Add($"{tc.TemplateId} expected {(formalParamTypes == null ? "0" : formalParamTypes.Count)}" +
-                                        $"arguments got {(tc.ArgList == null ? "0" : tc.ArgList.Count)}");
-            return; // return to avoid null dereference exceptions
+        if(formalParamTypes.Count != tc.ArgList.Count) {
+            errors.Add($"{tc.TemplateId} expected {formalParamTypes.Count} argument(s) got {tc.ArgList.Count}");
         }
 
+        if(formalParamTypes.Count == 0 || tc.ArgList.Count == 0) return;
         for (int i = 0; i < formalParamTypes.Count; i++) { // could loop over formal or actual parameter count: they are interchangable at this point
             TypeT expected = formalParamTypes[i];
             TypeT actual = ExpType(tc.ArgList[i], envV, envC, envH, envT, envR, envCPT);
@@ -303,7 +297,7 @@ class TypeChecker {
         return isWellTyped;
     }
 
-    /// <summary> Check all resource specifications: a*rc ident | r </summary>
+    /// <summary> Check all resource specifications: a rc ident | r </summary>
     private bool ResourceSpecIsWellTyped(List<ResourceSpec> resourceSpecs, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
       
         bool isWellTyped = true;
