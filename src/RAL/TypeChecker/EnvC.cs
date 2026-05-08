@@ -9,8 +9,11 @@ public class EnvC {
         return C.Contains(category);
     }
 
-    public void AddCategory(string category) {
-        if(CategoryIsDeclared(category)) throw new Exception($"Category '{category}' has already been declared");
+    public bool AddCategory(string category) {
+        if(CategoryIsDeclared(category)) 
+            return false;
+            
         C.Add(category);
+        return true;
     }
 }

@@ -1,4 +1,6 @@
 namespace RAL.Interpreter;
+
+using System.ComponentModel;
 using System.Globalization;
 
 /* Runtime values used by the interpreter.
@@ -15,7 +17,13 @@ using System.Globalization;
 */
 
 
-public abstract record Value {}
+public abstract record Value
+{
+    /*Default methods to avoid poluting interpreter.cs with downcasts. 
+      Typechecking should have guarded possible exceptions */
+    public bool AsBool()  => ((BoolVal)this).Value; 
+    
+}
 
 /* For now, Number is represented as float because the language 
    uses one Number type for both integer-like and decimal values. */
@@ -39,7 +47,7 @@ record StringVal(string Value) : Value
 /*________________ Time ______________*/
 record DateTimeVal(DateTime Value) : Value
 {
-    // Returns the DateTime formatted as "dd/MM-yyyy HH:mm" using French (fr-FR) culture.
+    // Returns the DateTime formatted as custom "dd/MM-yyyy HH:mm" using French (fr-FR) culture.
     public override string ToString() => Value.ToString("dd/MM-yyyy HH:mm", new CultureInfo("fr-FR"));
 }
 
@@ -47,3 +55,27 @@ record DurationVal(TimeSpan Value) : Value
 {
     public override string ToString() => Value.ToString();
 }
+
+/*
+
+//EnvV, EnvF, EnvH
+
+//CategoryId for move to avoid linear search of every list in Categories,     property id -> value
+record ResourceVal(string ResourceId, string CategoryId, Dictionary<string , Value> Properties) : Value;
+
+//CategoryId -> Resources within it. EnvH is still needed.
+Dictionary<string, List<ResourceVal>> ResourcesByCategory
+
+
+
+// 2 DoubleRoom dr and 3 Room ... time ...
+//Alternative one resourceVal and make it composite reservation i.e. ReservationVal, drawback cannot reschedule
+record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateTimeVal End );
+
+//All reservations treated equally like this. An atomic reservation, has a list length 1
+record ReservationVal( List<ReservationAtomVal> Reservations) : Value;
+
+
+//   
+List<ReservationVal> Calendar = new();
+*/

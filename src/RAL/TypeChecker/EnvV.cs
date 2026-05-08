@@ -15,30 +15,32 @@ public class EnvV {
         return new EnvV(this);
     }
 
-    public void Bind(string var, TypeT type) {
+    public bool Bind(string var, TypeT type) {
         if (V.ContainsKey(var)) {
-            throw new Exception($"Variable '{var}' already declared in current scope.");
+            return false;
         }
 
-        V[var] = type;
+        V.Add(var, type);
+        return true;
     }
 
-    public void ChangeCategory(string var, TypeT type) {
+    public bool ChangeCategory(string var, TypeT type) {
         if (V.ContainsKey(var)) {
             V[var] = type;
+            return true;
         } else {
-            throw new Exception($"Use of undeclared variable: '{var}'.");
+            return false;
         }
     }
 
-    public TypeT Lookup(string var) {
+    public TypeT? Lookup(string var) {
         if (V.TryGetValue(var, out TypeT type)) 
             return type;
 
         if (parent != null) 
             return parent.Lookup(var);
         
-        throw new Exception($"Use of undeclared variable: '{var}'.");
+        return null;
     }
 
     // unneeded
@@ -60,23 +62,5 @@ public class EnvV {
 
         //Return global scope
         return current;
-    }
-
-    ///<summary> Returns a list of all ids of variablesthat are of (or subtype of) the provided category /// </summary>
-    public List<string> GetResourcesByCategory(ResourceT category, EnvV envV, EnvH envH) {
-        List<string> resourceIds = new();
-
-        //Resources are only declarable in global scope, traverse til there
-        EnvV globalScope = envV.GetGlobalScope();
-        
-        // Check current scope
-        foreach (KeyValuePair<string, TypeT> pair in globalScope.V) {
-            //Pattern match on those elements of resource types, add the 
-            if (pair.Value is ResourceT resource && envH.IsSubtype(resource, category)) {
-                resourceIds.Add(pair.Key);
-            }
-        }
-
-        return resourceIds;
     }
 }

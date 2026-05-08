@@ -33,7 +33,7 @@ class Program {
 
             TypeChecker typeChecker = new TypeChecker();
 
-            typeChecker.StmtType(program, new EnvV(), new EnvC(), new EnvH(), new EnvT(), new EnvR());
+            typeChecker.StmtType(program, new EnvV(), new EnvC(), new EnvH(), new EnvT(), new EnvR(), new EnvCPT());
 
             //Console.WriteLine("\n\n\n\nProgram:\n"+ program.ToString() + "\n\n\n\n\n");
 

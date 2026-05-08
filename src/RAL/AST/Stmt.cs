@@ -14,13 +14,13 @@ record class Composite(int LineNumber, Stmt? Stmt1, Stmt? Stmt2 ) : Stmt(LineNum
 
 record class VarDecl(int LineNumber, TypeT Type, string Identifier) : Stmt(LineNumber);
 //Null -> no properties. Non-null -> at least one property. List<Stmt> -> each element may be Vardecl | Comp(Vardecl, Assignment)
-record class ResourceDecl(int LineNumber, TypeT Type, string Identifier, List<Stmt>? PropertyList) : Stmt(LineNumber);
+record class ResourceDecl(int LineNumber, ResourceT Type, string Identifier, List<Stmt>? PropertyList) : Stmt(LineNumber);
 
 record class CategoryDecl (int LineNumber, string CategoryId, string? ParentId) : Stmt(LineNumber);
 
 record class TemplateDecl(int LineNumber, string TemplateId, List<VarDecl>? ParamList, Stmt? TemplateBody) : Stmt(LineNumber);
 
-record class Move(int LineNumber, string ResourceId, string CategoryId ) : Stmt(LineNumber);
+record class Move(int LineNumber, string ResourceId, ResourceT Type ) : Stmt(LineNumber);
 
 /*                                 might be id, might be a reserve expression */
 record class Cancel(int LineNumber, Exp Reservation) : Stmt(LineNumber);
