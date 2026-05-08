@@ -42,26 +42,24 @@ public class EnvH {
         .Select(kvp => kvp.Key);
 
      public IEnumerable<ResourceT>? GetAllRelated(ResourceT category) {
+        //Set of all related nodes, ancesters and decendants
         var result = new HashSet<ResourceT>();
 
-        //Upwards
+        //Upwards, ancesters
         ResourceT? current = category;
         while (current != null) {
             result.Add(current);
             if (!TryGetParent(current, out ResourceT? parent)) {
+                //Indicates invalid input
                 return null;
             }
 
             current = parent;
         }
-
-        //Downwards
-        var stack = new Stack<ResourceT>(GetChildren(category));
-        while (stack.Count > 0) {
-            var node = stack.Pop();
-            if (result.Add(node))
-                foreach (var child in GetChildren(node))
-                    stack.Push(child);
+        
+        // Downwards, descendants
+        foreach (ResourceT node in GetSubtree(category)) {
+            result.Add(node);
         }
 
         return result;
@@ -72,6 +70,7 @@ public class EnvH {
         var result = new HashSet<ResourceT>();
         var stack = new Stack<ResourceT>();
         stack.Push(category);
+        
         while (stack.Count > 0) {
             var node = stack.Pop();
             if (result.Add(node))
