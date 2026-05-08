@@ -56,26 +56,33 @@ record DurationVal(TimeSpan Value) : Value
     public override string ToString() => Value.ToString();
 }
 
-/*
+
 
 //EnvV, EnvF, EnvH
 
 //CategoryId for move to avoid linear search of every list in Categories,     property id -> value
 record ResourceVal(string ResourceId, string CategoryId, Dictionary<string , Value> Properties) : Value;
 
+
+/*
 //CategoryId -> Resources within it. EnvH is still needed.
 Dictionary<string, List<ResourceVal>> ResourcesByCategory
-
+*/
 
 
 // 2 DoubleRoom dr and 3 Room ... time ...
 //Alternative one resourceVal and make it composite reservation i.e. ReservationVal, drawback cannot reschedule
 record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateTimeVal End );
 
-//All reservations treated equally like this. An atomic reservation, has a list length 1
+/// <summary>
+/// All reservations are treated equally like this. 
+/// An atomic reservation, has a list length 1
+/// An empty list indicates a "rejected" reservation attempt 
+/// </summary>
+/// <param name="Reservations"></param>
 record ReservationVal( List<ReservationAtomVal> Reservations) : Value;
 
 
-//   
+/*  
 List<ReservationVal> Calendar = new();
 */

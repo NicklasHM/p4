@@ -8,31 +8,34 @@ Assignment  ->  Set    = update existing name in nearest scope
 Variable    ->  Lookup = find name from local or outward
 */
 
-public class Env<T>
+public class EnvV
 {
-    private readonly Env<T>? parent; // parent scope. Null means this is the global/root scope.
-    private readonly Dictionary<string, T?> bindings = new(); // One dictionary(hashmap) per scope. Maps names to values.
+    private readonly EnvV? parent; // parent scope. Null means this is the global/root scope.
+    private readonly Dictionary<string, Value> bindings = new(); // One dictionary(hashmap) per scope. Maps names to values.
 
-    public Env(Env<T>? parent = null) // Creates an environment. If parent is null, this is the global scope.
-    {
+    //Constructor
+    public EnvV(EnvV? parent = null) {// Creates an environment. If parent is null, this is the global scope.
+
         this.parent = parent;
     }
-    //Analogy: new Env<T>(above) builds the house, NewScope() (below) builds the room inside the house.
-    public Env<T> NewScope() // Creates a child scope where this Env is the parent.
-    {
-        return new Env<T>(this);
+    
+    //Analogy: new EnvV(above) builds the house, NewScope() (below) builds the room inside the house.
+    public EnvV NewScope() {// Creates a child scope where this Env is the parent.
+    
+        return new EnvV(this);
     }
 
-    public void Bind(string name, T? value) // bind a name to a value in the current scope
+    public void Bind(string name, Value value) // bind a name to a value in the current scope
     {
         if (IsLocal(name)) // check if the name is already defined in the current scope
-            throw new Exception($"'{name}' is already defined in this scope.");
+            throw new Exception($"EnvV({name}) already maps to a value. Type checker should have prevented duplicate declarations within same scope.");
 
         bindings[name] = value; // bind the name to the value in the current scope
     }
 
-    public void Set(string name, T? value) // Updates an existing binding. Searches current scope, then parent scopes.
+    public void Set(string name, Value value) // Updates an existing binding. Searches current scope, then parent scopes.
     {
+        //Base case, 
         if (bindings.ContainsKey(name))
         {
             bindings[name] = value;
@@ -41,13 +44,13 @@ public class Env<T>
         {
             parent.Set(name, value); 
         }
-        else // Throws error if the name does not exist anywhere.
+        else // Throw exception if the name does not exist anywhere. Programmer error
         {
-            throw new Exception($"Cannot assign to unknown name '{name}'.");
+            throw new Exception($"No EnvV has an entry for {name} to set. Type checker should have prevented this.");
         }
     }
 
-    public T? Lookup(string name) // lookup a value for a name in the current scope. local -> parent -> global -> error
+    public Value Lookup(string name) // lookup a value for a name in the current scope. local -> parent -> global -> error
     {
         if (bindings.ContainsKey(name))
             return bindings[name]; // return the value for the name in the current scope
@@ -59,8 +62,7 @@ public class Env<T>
     }
 
     public bool IsLocal(string name)
-    /*Checks if a name is defined in the current scope only.
-    Used to prevent redeclaration in the same scope.*/
+    /*Checks if a name is defined in the current scope only. Used to prevent redeclaration in the same scope.*/
     {
         return bindings.ContainsKey(name); // return true if the name is defined in the current scope, false otherwise
     }

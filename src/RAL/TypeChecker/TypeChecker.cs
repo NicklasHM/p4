@@ -82,9 +82,7 @@ class TypeChecker {
     }
 
     private void HandleVarDecl(VarDecl decl, EnvV envV, EnvC envC) {
-        if(decl.Type is ResourceT r && !envC.CategoryIsDeclared(r.Category))
-            errors.Add($"Use of undeclared category '{r.ToString()}'.");
-   
+
         bool bound = envV.Bind(decl.Identifier, decl.Type);
         if(!bound) errors.Add($"Variable '{decl.Identifier}' already declared in current scope.");
     }
@@ -124,12 +122,13 @@ class TypeChecker {
 
         envR.RegisterResource(resDecl.Identifier); // Invariant: All resources must be registered in resource environment, important for property checking
 
-        if (resDecl.PropertyList == null) return; // impossible to be illtyped if not present
+        //PropertyList may be empty -> below loop is never entered
 
+        EnvV propertyScope = envV.NewScope();
         foreach (Stmt stmt in resDecl.PropertyList) { // loop over fields
             switch (stmt) {
                 case VarDecl varDecl: { // Field decl without assignment
-                    HandlePropertyDecl(resDecl, varDecl, envV, envH, envR, envCPT, false);
+                    HandlePropertyDecl(resDecl, varDecl, propertyScope, envH, envR, envCPT, false);
                     break;
                 }
 
@@ -138,7 +137,6 @@ class TypeChecker {
                     Stmt2: ExpStmt exp      // guaranteed to be ExpStmt
                 }:  
 
-                    EnvV propertyScope = envV.NewScope();
                     HandlePropertyDecl(resDecl, varDecl, propertyScope, envH, envR, envCPT, true);
 
                     TypeT expType = ExpType(exp.Expression, propertyScope, envC, envH, envT, envR, envCPT);
@@ -151,19 +149,17 @@ class TypeChecker {
 
     private void HandlePropertyDecl(ResourceDecl resDecl, VarDecl varDecl, EnvV envV, EnvH envH, EnvR envR, EnvCPT envCPT, bool withAssignment) {
         if (varDecl.Type is ResourceT || varDecl.Type is ReservationT) {
-            errors.Add($"'{varDecl.Type}' not allowed as field type for resource");
+            errors.Add($"'{varDecl.Type}' not allowed as property type for resource.\n");
         } else {
 
             //A new scope is passed so within the resource envV is used as lookup, when assigning
-            if(withAssignment) {
-                bool bound = envV.Bind(varDecl.Identifier, varDecl.Type);  
-                if(!bound) errors.Add($"Variable '{varDecl.Identifier}' already declared in current scope.");
-            }
+            bool bound = envV.Bind(varDecl.Identifier, varDecl.Type);  
+            if(!bound) errors.Add($"Variable '{varDecl.Identifier}' already declared in current scope.");
 
             //For use outside resource
             bool boundR = envR.BindField(resDecl.Identifier, varDecl.Identifier, varDecl.Type);
             if(!boundR) errors.Add($"Property '{varDecl.Identifier}' has already been declared.");
-
+            
              //
             CheckCategoryPropertyConflict(resDecl.Type, varDecl.Identifier, varDecl.Type, envH, envCPT);
 
@@ -210,11 +206,17 @@ class TypeChecker {
         List<TypeT> paramTypes = new();
 
         foreach(VarDecl param in tmplDecl.ParamList) {
+
+            //Resource types, category must be declared
+            if(param.Type is ResourceT r && !envC.CategoryIsDeclared(r.Category))
+                errors.Add($"Use of undeclared category '{r.ToString()}'.");
+   
             paramTypes.Add(param.Type); // extract types from param list and add to template environment
-            tmplScope.Bind(param.Identifier, param.Type); // make formal parameters accessible (only) in template body
+            bool bound = tmplScope.Bind(param.Identifier, param.Type); // make formal parameters accessible (only) in template body
+            if(!bound) errors.Add($"Variable '{param.Identifier}' has already been declared in this scope.");
         }
-        bool bound = envT.Bind(tmplDecl.TemplateId, paramTypes); // bind template id to formal param types
-        if(!bound) errors.Add($"Template '{tmplDecl.TemplateId}' already declared.");
+        bool boundT = envT.Bind(tmplDecl.TemplateId, paramTypes); // bind template id to formal param types
+        if(!boundT) errors.Add($"Template '{tmplDecl.TemplateId}' already declared.");
 
         if(tmplDecl.TemplateBody != null) 
             StmtType(tmplDecl.TemplateBody, tmplScope, envC, envH, envT, envR, envCPT); // type check body. 
@@ -443,7 +445,7 @@ class TypeChecker {
 
      private TypeT HandleAssignment(Assignment assign, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         TypeT varType = HandleReference(assign.Variable, envV, envH, envR, envCPT);
-        TypeT expType = ExpType(assign.Value, envV, envC, envH, envT, envR, envCPT);
+        TypeT expType = ExpType(assign.Expression, envV, envC, envH, envT, envR, envCPT);
 
         if (varType is ErrorT) return varType;
         if (expType is ErrorT) return expType;

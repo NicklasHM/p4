@@ -199,11 +199,10 @@ PRODUCTIONS
 // Resource, Ident
   ResourceDecl<out Stmt stmt> =  
     ident                         (. int lineNumber = t.line; ResourceT type = new ResourceT(t.val); .) //* Resource of a user-defined category */
-    ident                         (. string identifier = t.val; List<Stmt>? propertyList = null; .)
+    ident                         (. string identifier = t.val; List<Stmt> propertyList = new(); .)
       
     "{" /* Force {}. Property set cannot change later, user aware.*/
-        [                                       (. propertyList = new List<Stmt>(); .)
-          
+        [                                      
           /*Note: call NON-Terminal, NODE may be VarDecl | Comp(decl,assignment). */
         
           VarDecl<out Stmt prop> ";"            (. propertyList.Add(prop); .)

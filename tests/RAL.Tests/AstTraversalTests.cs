@@ -39,7 +39,7 @@ file static class AstVisitor
         return exp switch
         {
             Reserve r    => r.Query.Condition,
-            Assignment a => FindQueryConditionInExp(a.Value),
+            Assignment a => FindQueryConditionInExp(a.Expression),
             _            => null
         };
     }

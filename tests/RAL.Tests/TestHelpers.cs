@@ -123,7 +123,7 @@ static class TestHelpers
     private static Exp? TryFindAssignmentRhs(Stmt? stmt)
     {
         if (stmt is null) return null;
-        if (stmt is ExpStmt { Expression: Assignment a }) return a.Value;
+        if (stmt is ExpStmt { Expression: Assignment a }) return a.Expression;
         if (stmt is Composite c)
             return TryFindAssignmentRhs(c.Stmt1) ?? TryFindAssignmentRhs(c.Stmt2);
         return null;
@@ -145,7 +145,7 @@ static class TestHelpers
         if (stmt is ExpStmt { Expression: Assignment a })
         {
             counter++;
-            if (counter == target) return a.Value;
+            if (counter == target) return a.Expression;
             return null;
         }
         if (stmt is Composite c)

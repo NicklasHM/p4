@@ -14,7 +14,7 @@ record class Composite(int LineNumber, Stmt? Stmt1, Stmt? Stmt2 ) : Stmt(LineNum
 
 record class VarDecl(int LineNumber, TypeT Type, string Identifier) : Stmt(LineNumber);
 //Null -> no properties. Non-null -> at least one property. List<Stmt> -> each element may be Vardecl | Comp(Vardecl, Assignment)
-record class ResourceDecl(int LineNumber, ResourceT Type, string Identifier, List<Stmt>? PropertyList) : Stmt(LineNumber);
+record class ResourceDecl(int LineNumber, ResourceT Type, string Identifier, List<Stmt> PropertyList) : Stmt(LineNumber);
 
 record class CategoryDecl (int LineNumber, string CategoryId, string? ParentId) : Stmt(LineNumber);
 
