@@ -4,151 +4,19 @@ namespace RAL.Tests;
 
 /*
  * Test-only AST traversal utility.
- * This visitor exists solely to support assertions in the test suite.
- * It never touches production AST classes.
+ *
+ * Only helpers that navigate to deeply nested nodes are retained here.
+ * CountNodes, FindAnyReferenceWithPropertyId, and FindResourceDeclWithProperties
+ * were removed: they returned counts/booleans and discarded the actual node
+ * content, making assertions vague. Tests now navigate the Composite tree
+ * directly and assert on specific node fields.
  */
 file static class AstVisitor
 {
-    // Count occurrences of each concrete Stmt/Exp type in the tree.
-    public static Dictionary<Type, int> CountNodes(Stmt root)
-    {
-        var counts = new Dictionary<Type, int>();
-        WalkStmt(root, counts);
-        return counts;
-    }
-
-    private static void WalkStmt(Stmt? stmt, Dictionary<Type, int> c)
-    {
-        if (stmt is null) return;
-        Increment(c, stmt.GetType());
-
-        switch (stmt)
-        {
-            case Composite s:
-                WalkStmt(s.Stmt1, c);
-                WalkStmt(s.Stmt2, c);
-                break;
-            case VarDecl:
-                break;
-            case ResourceDecl rd:
-                if (rd.PropertyList is not null)
-                    foreach (Stmt p in rd.PropertyList) WalkStmt(p, c);
-                break;
-            case CategoryDecl:
-                break;
-            case TemplateDecl td:
-                WalkStmt(td.TemplateBody, c);
-                break;
-            case If i:
-                WalkExp(i.Condition, c);
-                WalkStmt(i.ThenBody, c);
-                WalkStmt(i.ElseBody, c);
-                break;
-            case ExpStmt es:
-                WalkExp(es.Expression, c);
-                break;
-            case TemplateCall tc:
-                if (tc.ArgList is not null)
-                    foreach (Exp a in tc.ArgList) WalkExp(a, c);
-                break;
-            case Cancel cn:
-                WalkExp(cn.Reservation, c);
-                break;
-            case Move:
-            case Availability:
-            case Skip:
-                break;
-        }
-    }
-
-    private static void WalkExp(Exp? exp, Dictionary<Type, int> c)
-    {
-        if (exp is null) return;
-        Increment(c, exp.GetType());
-
-        switch (exp)
-        {
-            case BinaryOperation b:
-                WalkExp(b.LeftExpression, c);
-                WalkExp(b.RightExpression, c);
-                break;
-            case UnaryOperation u:
-                WalkExp(u.Expression, c);
-                break;
-            case Assignment a:
-                WalkExp(a.Value, c);
-                break;
-            case Reschedule r:
-                WalkExp(r.Reservation, c);
-                break;
-            case Reserve:
-            case Reference:
-            case NumberV:
-            case BoolV:
-            case StringV:
-            case DateTimeV:
-            case DurationV:
-                break;
-        }
-    }
-
-    // Returns true if any Reference node in the tree has a non-null PropertyId.
-    public static bool FindAnyReferenceWithPropertyId(Stmt root)
-    {
-        return SearchStmtForPropertyRef(root);
-    }
-
-    private static bool SearchStmtForPropertyRef(Stmt? stmt)
-    {
-        if (stmt is null) return false;
-        return stmt switch
-        {
-            Composite c   => SearchStmtForPropertyRef(c.Stmt1) || SearchStmtForPropertyRef(c.Stmt2),
-            ExpStmt es    => SearchExpForPropertyRef(es.Expression),
-            If i          => SearchExpForPropertyRef(i.Condition)
-                             || SearchStmtForPropertyRef(i.ThenBody)
-                             || SearchStmtForPropertyRef(i.ElseBody),
-            TemplateDecl td => SearchStmtForPropertyRef(td.TemplateBody),
-            ResourceDecl rd => rd.PropertyList?.Any(p => SearchStmtForPropertyRef(p)) ?? false,
-            Cancel cn     => SearchExpForPropertyRef(cn.Reservation),
-            _             => false
-        };
-    }
-
-    private static bool SearchExpForPropertyRef(Exp? exp)
-    {
-        if (exp is null) return false;
-        return exp switch
-        {
-            Reference r when r.PropertyId != null => true,
-            BinaryOperation b => SearchExpForPropertyRef(b.LeftExpression) || SearchExpForPropertyRef(b.RightExpression),
-            UnaryOperation u  => SearchExpForPropertyRef(u.Expression),
-            Assignment a      => SearchExpForPropertyRef(a.Value),
-            _                 => false
-        };
-    }
-
-    // Returns true if any ResourceDecl in the tree has a non-null, non-empty PropertyList.
-    public static bool FindResourceDeclWithProperties(Stmt root)
-    {
-        return SearchStmtForResourceWithProps(root);
-    }
-
-    private static bool SearchStmtForResourceWithProps(Stmt? stmt)
-    {
-        if (stmt is null) return false;
-        return stmt switch
-        {
-            ResourceDecl rd when rd.PropertyList is { Count: > 0 } => true,
-            Composite c => SearchStmtForResourceWithProps(c.Stmt1) || SearchStmtForResourceWithProps(c.Stmt2),
-            _           => false
-        };
-    }
-
-    // Returns the where-clause Condition expression from the first Reserve or Availability
-    // query found in the tree, or null if none exists or the clause is absent.
-    // Note: AstVisitor.WalkStmt does not walk into Reserve/Availability query data,
-    // so CountNodes cannot be used for this purpose — use this helper instead.
+    // Returns the where-clause Condition expression from the first Reserve or
+    // Availability query in the tree, or null if absent.
+    // Needed because Reserve is nested inside Assignment.Value inside ExpStmt
+    // — direct navigation without a helper would require four Composite steps.
     public static Exp? FindFirstQueryCondition(Stmt root)
         => SearchForQueryCondition(root);
 
@@ -176,7 +44,39 @@ file static class AstVisitor
         };
     }
 
-    // Returns the first TemplateCall node found in the statement tree, or null.
+    // Returns the first If node in the statement tree, or null.
+    public static If? FindFirstIf(Stmt root)
+        => SearchForIf(root);
+
+    private static If? SearchForIf(Stmt? stmt)
+    {
+        if (stmt is null) return null;
+        return stmt switch
+        {
+            If ifNode   => ifNode,
+            Composite c => SearchForIf(c.Stmt1) ?? SearchForIf(c.Stmt2),
+            _           => null
+        };
+    }
+
+    // Returns the first Cancel node in the statement tree, or null.
+    public static Cancel? FindFirstCancel(Stmt root)
+        => SearchForCancel(root);
+
+    private static Cancel? SearchForCancel(Stmt? stmt)
+    {
+        if (stmt is null) return null;
+        return stmt switch
+        {
+            Cancel cn   => cn,
+            Composite c => SearchForCancel(c.Stmt1) ?? SearchForCancel(c.Stmt2),
+            _           => null
+        };
+    }
+
+    // Returns the first TemplateCall node in the statement tree, or null.
+    // Needed because TemplateCall sits inside a Composite alongside TemplateDecl
+    // and direct navigation would depend on the exact list position.
     public static TemplateCall? FindFirstTemplateCall(Stmt root)
         => SearchForTemplateCall(root);
 
@@ -191,12 +91,6 @@ file static class AstVisitor
             _               => null
         };
     }
-
-    private static void Increment(Dictionary<Type, int> c, Type t)
-    {
-        c.TryGetValue(t, out int n);
-        c[t] = n + 1;
-    }
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -210,14 +104,13 @@ public class AstTraversalTests
     {
         // "Number x = 2 + 3 * 4;" should produce:
         //   BinaryOperation(ADD, NumberV(2), BinaryOperation(MUL, NumberV(3), NumberV(4)))
-        // i.e. ADD wraps MUL, meaning ADD is the outer (higher) node.
+        // ADD is the outer node because it has lower binding power.
         Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidNestedArithmetic);
         Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
 
         var add = Assert.IsType<BinaryOperation>(rhs);
         Assert.Equal(BinaryOperator.ADD, add.Operator);
 
-        // Right child of ADD must be MUL
         var mul = Assert.IsType<BinaryOperation>(add.RightExpression);
         Assert.Equal(BinaryOperator.MUL, mul.Operator);
     }
@@ -227,55 +120,18 @@ public class AstTraversalTests
     {
         // "Number x = (2 + 3) * 4;" should produce:
         //   BinaryOperation(MUL, BinaryOperation(ADD, NumberV(2), NumberV(3)), NumberV(4))
-        // i.e. MUL wraps ADD.
+        // Parentheses force ADD to be the inner node.
         Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidParenArithmetic);
         Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
 
         var mul = Assert.IsType<BinaryOperation>(rhs);
         Assert.Equal(BinaryOperator.MUL, mul.Operator);
 
-        // Left child of MUL must be ADD
         var add = Assert.IsType<BinaryOperation>(mul.LeftExpression);
         Assert.Equal(BinaryOperator.ADD, add.Operator);
     }
 
-    // ── Node counting ─────────────────────────────────────────────────────────
-
-    [Fact]
-    public void MultipleDecls_CountsVarDeclCorrectly()
-    {
-        // "Number x = 1; Number y = 2; Number z = 3;" → three VarDecl nodes
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidMultipleDecls);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.TryGetValue(typeof(VarDecl), out int n) && n == 3,
-            $"Expected 3 VarDecl nodes, got {(counts.TryGetValue(typeof(VarDecl), out int m) ? m : 0)}");
-    }
-
-    [Fact]
-    public void SingleDecl_ContainsExactlyOneVarDecl()
-    {
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidNumberDecl);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.Equal(1, counts.GetValueOrDefault(typeof(VarDecl)));
-    }
-
-    [Fact]
-    public void NestedArithmetic_ContainsTwoBinaryOperations()
-    {
-        // "Number x = 2 + 3 * 4;" → ADD and MUL = 2 BinaryOperation nodes
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidNestedArithmetic);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.Equal(2, counts.GetValueOrDefault(typeof(BinaryOperation)));
-    }
-
-    [Fact]
-    public void ParenArithmetic_ContainsTwoBinaryOperations()
-    {
-        // "(2 + 3) * 4" → ADD and MUL = 2 BinaryOperation nodes
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidParenArithmetic);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.Equal(2, counts.GetValueOrDefault(typeof(BinaryOperation)));
-    }
+    // ── Literal expressions and unary operators ───────────────────────────────
 
     [Fact]
     public void BoolExpr_ContainsOneAndBinaryOperation()
@@ -287,14 +143,10 @@ public class AstTraversalTests
         Assert.Equal(BinaryOperator.AND, and.Operator);
     }
 
-    // ── Unary operators: AST shape ────────────────────────────────────────────
-
     [Fact]
     public void NotKeyword_ShouldProduceUnaryOperationNode()
     {
-        // "Bool result = not(false);" must produce
-        //   UnaryOperation(NOT, BoolV(false))
-        // as the right-hand side of the assignment.
+        // "Bool result = not(false);" must produce UnaryOperation(NOT, BoolV(false)).
         Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.NotFalse);
         Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
 
@@ -307,9 +159,7 @@ public class AstTraversalTests
     [Fact]
     public void UnaryMinus_ShouldProduceNegOperationNode()
     {
-        // "Number x = -5;" must produce
-        //   UnaryOperation(NEG, NumberV(5))
-        // as the right-hand side of the assignment.
+        // "Number x = -5;" must produce UnaryOperation(NEG, NumberV(5)).
         Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.UnaryMinusFive);
         Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
 
@@ -318,42 +168,177 @@ public class AstTraversalTests
         Assert.IsType<NumberV>(unary.Expression);
     }
 
-    // ── Composite structure ───────────────────────────────────────────────────
+    // ── Program structure: declarations ───────────────────────────────────────
+    //
+    // toComposite builds right-leaning trees: toComposite([A,B,C]) = Composite(A, Composite(B, C)).
+    // A single-statement program's root IS the statement node with no wrapping Composite.
 
     [Fact]
-    public void IfStatement_ContainsIfNode()
+    public void CategoryDecl_HasCorrectIdAndNullParent()
     {
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidIfStmt);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.ContainsKey(typeof(If)),
-            "Expected an If node in the AST.");
-    }
-
-    [Fact]
-    public void ResourceDecl_IsInAST()
-    {
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidResourceDecl);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.ContainsKey(typeof(ResourceDecl)),
-            "Expected a ResourceDecl node in the AST.");
-    }
-
-    [Fact]
-    public void TemplateDecl_IsInAST()
-    {
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidResourceTemplate);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.ContainsKey(typeof(TemplateDecl)),
-            "Expected a TemplateDecl node in the AST.");
-    }
-
-    [Fact]
-    public void CategoryDecl_IsInAST()
-    {
+        // "category Room;" — single statement; root IS the CategoryDecl node directly.
         Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidCategory);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.ContainsKey(typeof(CategoryDecl)),
-            "Expected a CategoryDecl node in the AST.");
+        var catDecl = Assert.IsType<CategoryDecl>(root);
+        Assert.Equal("Room", catDecl.CategoryId);
+        Assert.Null(catDecl.ParentId);  // no "is a" relation declared
+    }
+
+    [Fact]
+    public void ResourceDecl_HasCorrectIdentifierAndCategoryType()
+    {
+        // "category Room;\nRoom myRoom {}"
+        // Tree: Composite(CategoryDecl("Room"), ResourceDecl(ResourceT("Room"), "myRoom", null))
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidResourceDecl);
+        var comp = Assert.IsType<Composite>(root);
+        var resourceDecl = Assert.IsType<ResourceDecl>(comp.Stmt2);
+        Assert.Equal("myRoom", resourceDecl.Identifier);
+        var resourceType = Assert.IsType<ResourceT>(resourceDecl.Type);
+        Assert.Equal("Room", resourceType.Category);
+        Assert.Null(resourceDecl.PropertyList);  // empty body {}
+    }
+
+    [Fact]
+    public void IfStatement_HasReferenceConditionAndBodies()
+    {
+        // "Bool cond = true; if (cond) then {...} else {...}"
+        // The If node is in the Composite tree — depth depends on the parser's
+        // Composite folding, so we navigate with FindFirstIf rather than by position.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidIfStmt);
+        If? ifStmt = AstVisitor.FindFirstIf(root);
+        Assert.NotNull(ifStmt);
+        var condRef = Assert.IsType<Reference>(ifStmt!.Condition);
+        Assert.Equal("cond", condRef.VariableId);
+        Assert.Null(condRef.PropertyId);
+        Assert.NotNull(ifStmt.ThenBody);
+        Assert.NotNull(ifStmt.ElseBody);
+    }
+
+    [Fact]
+    public void TemplateDecl_HasCorrectIdAndParameters()
+    {
+        // "template booking(Number qty, String label) { ... }"
+        // Tree: Composite(CategoryDecl, Composite(ResourceDecl, TemplateDecl))
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidResourceTemplate);
+        var c1 = Assert.IsType<Composite>(root);
+        var c2 = Assert.IsType<Composite>(c1.Stmt2);
+        var tmplDecl = Assert.IsType<TemplateDecl>(c2.Stmt2);
+        Assert.Equal("booking", tmplDecl.TemplateId);
+        Assert.NotNull(tmplDecl.ParamList);
+        Assert.Equal(2, tmplDecl.ParamList!.Count);
+        Assert.Equal("qty",   tmplDecl.ParamList[0].Identifier);
+        Assert.IsType<NumberT>(tmplDecl.ParamList[0].Type);
+        Assert.Equal("label", tmplDecl.ParamList[1].Identifier);
+        Assert.IsType<StringT>(tmplDecl.ParamList[1].Type);
+    }
+
+    // ── Core RAL features ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void ReserveExpression_HasNamedResourceAndDateInterval()
+    {
+        // "reserve myRoom from 15/03-2026 to 16/03-2026"
+        // Reserve is the RHS of the assignment. ResourceSpec carries the named resource.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidReserveStatement);
+        Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
+        var reserve = Assert.IsType<Reserve>(rhs);
+        Assert.Single(reserve.Query.ResourceSpecs);
+        var spec = reserve.Query.ResourceSpecs[0];
+        Assert.Equal("myRoom", spec.Identifier);
+        Assert.Null(spec.Quantity);    // named resource form, not quantity-based
+        Assert.Null(spec.CategoryId);  // named resource form, not category-based
+        Assert.IsType<DateTimeV>(reserve.Query.Interval.Start);
+        Assert.IsType<DateTimeV>(reserve.Query.Interval.EndMarker);
+    }
+
+    [Fact]
+    public void AvailabilityCheck_HasNamedResourceAndDateInterval()
+    {
+        // "check myRoom from 15/03-2026 to 16/03-2026"
+        // Tree: Composite(CategoryDecl, Composite(ResourceDecl, Availability))
+        // No where clause: Condition must be null.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidAvailabilityQuery);
+        var c1 = Assert.IsType<Composite>(root);
+        var c2 = Assert.IsType<Composite>(c1.Stmt2);
+        var avail = Assert.IsType<Availability>(c2.Stmt2);
+        Assert.Single(avail.Query.ResourceSpecs);
+        var spec = avail.Query.ResourceSpecs[0];
+        Assert.Equal("myRoom", spec.Identifier);
+        Assert.IsType<DateTimeV>(avail.Query.Interval.Start);
+        Assert.IsType<DateTimeV>(avail.Query.Interval.EndMarker);
+        Assert.Null(avail.Query.Condition);
+    }
+
+    [Fact]
+    public void MoveStatement_HasCorrectResourceAndTargetCategory()
+    {
+        // "move myRoom to Suite;"
+        // Tree: Composite(Cat, Composite(Cat, Composite(ResourceDecl, Move)))
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidMoveResourceToCategory);
+        var c1 = Assert.IsType<Composite>(root);
+        var c2 = Assert.IsType<Composite>(c1.Stmt2);
+        var c3 = Assert.IsType<Composite>(c2.Stmt2);
+        var move = Assert.IsType<Move>(c3.Stmt2);
+        Assert.Equal("myRoom", move.ResourceId);
+        Assert.Equal("Suite",  move.CategoryId);
+    }
+
+    [Fact]
+    public void CancelStatement_HasReservationVariableReference()
+    {
+        // "cancel res;" — Cancel.Reservation must be Reference("res", null).
+        // FindFirstCancel navigates the Composite tree to avoid position-dependency.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidCancelReservation);
+        Cancel? cancel = AstVisitor.FindFirstCancel(root);
+        Assert.NotNull(cancel);
+        var cancelRef = Assert.IsType<Reference>(cancel!.Reservation);
+        Assert.Equal("res", cancelRef.VariableId);
+        Assert.Null(cancelRef.PropertyId);
+    }
+
+    [Fact]
+    public void RescheduleExpression_HasReservationReferenceAndNewInterval()
+    {
+        // "reschedule res from 20/03-2026 to 21/03-2026" is the second assignment's RHS.
+        // Reschedule carries: the reservation it acts on, and the new TimeSpec.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidRescheduleReservation);
+        Exp rhs = TestHelpers.ExtractNthAssignmentRhs(root, 2);
+        var reschedule = Assert.IsType<Reschedule>(rhs);
+        var reservationRef = Assert.IsType<Reference>(reschedule.Reservation);
+        Assert.Equal("res", reservationRef.VariableId);
+        Assert.IsType<DateTimeV>(reschedule.NewTimeInterval.Start);
+        Assert.IsType<DateTimeV>(reschedule.NewTimeInterval.EndMarker);
+    }
+
+    [Fact]
+    public void PropertyAccess_HasCorrectVariableIdAndPropertyId()
+    {
+        // "Number numBeds = myRoom.beds;" — RHS is Reference("myRoom", "beds").
+        // ExtractFirstAssignmentRhs skips ResourceDecl.PropertyList, so the
+        // first assignment it finds is the numBeds = myRoom.beds one.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidResourcePropertyAccess);
+        Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
+        var propertyRef = Assert.IsType<Reference>(rhs);
+        Assert.Equal("myRoom", propertyRef.VariableId);
+        Assert.Equal("beds",   propertyRef.PropertyId);
+    }
+
+    [Fact]
+    public void ResourceDeclWithProperty_HasSingleFieldWithCorrectNameAndType()
+    {
+        // "Room myRoom { Number beds = 2; }"
+        // PropertyList has one entry: Composite(VarDecl(NumberT, "beds"), ExpStmt(Assignment)).
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidResourceWithProperty);
+        var comp = Assert.IsType<Composite>(root);
+        var resourceDecl = Assert.IsType<ResourceDecl>(comp.Stmt2);
+        Assert.Equal("myRoom", resourceDecl.Identifier);
+        var resourceType = Assert.IsType<ResourceT>(resourceDecl.Type);
+        Assert.Equal("Room", resourceType.Category);
+        Assert.NotNull(resourceDecl.PropertyList);
+        Assert.Single(resourceDecl.PropertyList!);
+        var propComposite = Assert.IsType<Composite>(resourceDecl.PropertyList![0]);
+        var fieldDecl = Assert.IsType<VarDecl>(propComposite.Stmt1);
+        Assert.Equal("beds", fieldDecl.Identifier);
+        Assert.IsType<NumberT>(fieldDecl.Type);
     }
 
     // ── DateTime / Duration: AST shape ───────────────────────────────────────
@@ -385,7 +370,7 @@ public class AstTraversalTests
         Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
         var dt = Assert.IsType<DateTimeV>(rhs);
         Assert.Equal(14, dt.Value.Hour);
-        Assert.Equal(0, dt.Value.Minute);
+        Assert.Equal(0,  dt.Value.Minute);
     }
 
     [Fact]
@@ -431,81 +416,7 @@ public class AstTraversalTests
         Assert.IsType<DateTimeV>(lt.RightExpression);
     }
 
-    // ── Core RAL features: AST shape ─────────────────────────────────────────
-
-    [Fact]
-    public void ReserveExpression_CreatesReserveNode()
-    {
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidReserveStatement);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.ContainsKey(typeof(Reserve)),
-            "Expected a Reserve node in the AST.");
-    }
-
-    [Fact]
-    public void AvailabilityCheck_CreatesAvailabilityNode()
-    {
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidAvailabilityQuery);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.ContainsKey(typeof(Availability)),
-            "Expected an Availability node in the AST.");
-    }
-
-    [Fact]
-    public void MoveStatement_CreatesMoveNode()
-    {
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidMoveResourceToCategory);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.ContainsKey(typeof(Move)),
-            "Expected a Move node in the AST.");
-    }
-
-    [Fact]
-    public void CancelStatement_CreatesCancelNode()
-    {
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidCancelReservation);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.ContainsKey(typeof(Cancel)),
-            "Expected a Cancel node in the AST.");
-    }
-
-    [Fact]
-    public void RescheduleExpression_CreatesRescheduleNode()
-    {
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidRescheduleReservation);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.ContainsKey(typeof(Reschedule)),
-            "Expected a Reschedule node in the AST.");
-    }
-
-    [Fact]
-    public void PropertyAccess_CreatesReferenceWithPropertyId()
-    {
-        // "myRoom.beds" must produce Reference("myRoom", "beds") — PropertyId is non-null.
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidResourcePropertyAccess);
-        Assert.True(AstVisitor.FindAnyReferenceWithPropertyId(root),
-            "Expected at least one Reference with a non-null PropertyId.");
-    }
-
-    [Fact]
-    public void ResourceDeclWithProperties_HasNonEmptyPropertyList()
-    {
-        // "Room myRoom { Number beds = 2; }" → ResourceDecl.PropertyList must be non-empty.
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidResourceWithProperty);
-        Assert.True(AstVisitor.FindResourceDeclWithProperties(root),
-            "Expected a ResourceDecl with a non-null, non-empty PropertyList.");
-    }
-
     // ── Where clauses: AST shape ──────────────────────────────────────────────
-
-    [Fact]
-    public void ReserveWhereClause_HasNonNullCondition()
-    {
-        // "reserve ... where (r.beds == 2);" — QueryData.Condition must not be null.
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidReserveWherePredicate);
-        Exp? condition = AstVisitor.FindFirstQueryCondition(root);
-        Assert.NotNull(condition);
-    }
 
     [Fact]
     public void ReserveWhereClause_ConditionHasPropertyReference()
@@ -517,39 +428,24 @@ public class AstTraversalTests
         var eq = Assert.IsType<BinaryOperation>(condition!);
         Assert.Equal(BinaryOperator.EQ, eq.Operator);
         var propertyRef = Assert.IsType<Reference>(eq.LeftExpression);
-        Assert.Equal("r", propertyRef.VariableId);
+        Assert.Equal("r",    propertyRef.VariableId);
         Assert.Equal("beds", propertyRef.PropertyId);
     }
 
     // ── Template calls: AST shape ──────────────────────────────────────────────
 
     [Fact]
-    public void TemplateCall_CreatesTemplateCallNode()
+    public void TemplateCall_HasCorrectIdAndTypedArguments()
     {
-        // "use booking(...);" must produce a TemplateCall node in the AST.
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidTemplateCall);
-        var counts = AstVisitor.CountNodes(root);
-        Assert.True(counts.ContainsKey(typeof(TemplateCall)),
-            "Expected a TemplateCall node in the AST.");
-    }
-
-    [Fact]
-    public void TemplateCall_HasCorrectTemplateId()
-    {
-        // "use booking(2, \"meeting\");" must produce TemplateCall with TemplateId == "booking".
+        // "use booking(2, \"meeting\");" must produce:
+        //   TemplateCall("booking", [NumberV(2), StringV("meeting")])
         Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidTemplateCall);
         TemplateCall? tc = AstVisitor.FindFirstTemplateCall(root);
         Assert.NotNull(tc);
         Assert.Equal("booking", tc!.TemplateId);
-    }
-
-    [Fact]
-    public void TemplateCall_HasCorrectArgumentCount()
-    {
-        // "use booking(2, \"meeting\");" must produce TemplateCall with ArgList of length 2.
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidTemplateCall);
-        TemplateCall? tc = AstVisitor.FindFirstTemplateCall(root);
-        Assert.NotNull(tc);
-        Assert.Equal(2, tc!.ArgList?.Count);
+        Assert.NotNull(tc.ArgList);
+        Assert.Equal(2, tc.ArgList!.Count);
+        Assert.IsType<NumberV>(tc.ArgList[0]);
+        Assert.IsType<StringV>(tc.ArgList[1]);
     }
 }
