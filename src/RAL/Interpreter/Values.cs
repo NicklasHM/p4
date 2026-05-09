@@ -61,7 +61,21 @@ record DurationVal(TimeSpan Value) : Value
 //EnvV, EnvF, EnvH
 
 //CategoryId for move to avoid linear search of every list in Categories,     property id -> value
-record ResourceVal(string ResourceId, string CategoryId, Dictionary<string , Value> Properties) : Value;
+public record ResourceVal(string ResourceId, string CategoryId, Dictionary<string , Value> Properties) : Value {
+    public override string ToString() {
+    
+        string r = $"{CategoryId}: {ResourceId} {{ \n";
+
+        foreach (var property in Properties) {
+
+            r += $"  {property.Key}: " + property.Value.ToString() + "\n";
+        }
+
+        r+= "} \n\n";
+
+        return r;
+    } 
+}
 
 
 /*

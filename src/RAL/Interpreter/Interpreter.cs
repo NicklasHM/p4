@@ -1,4 +1,6 @@
+using Microsoft.Win32;
 using RAL.AST;
+using RAL.TC;
 
 namespace RAL.Interpreter;
 
@@ -22,18 +24,21 @@ public class Interpreter {
 
     //Evaluates a statement with pattern matching on the AST nodes
 
-    public static void EvalStmt(Stmt stmt, EnvV envV)
+    public static void EvalStmt(Stmt stmt, EnvV envV, EnvH envH)
     {
         switch(stmt)
         {   case Skip: break;
            
-            case Composite c: HandleComposite(c, envV); break;
+            case Composite c: HandleComposite(c, envV, envH); break;
            
-            case If i: HandleIf(i, envV); break;
+            case If i: HandleIf(i, envV, envH); break;
 
             case VarDecl vd: HandleVarDecl(vd, envV); break;
 
+            case CategoryDecl cd: ExecCategoryDecl(cd, envH); break;
             case ResourceDecl rd: ExecResourceDecl(rd, envV); break;
+
+            case Move m: ExecMove(m, envV); break;
 
             case ExpStmt s: Console.WriteLine(EvalExp(s.Expression, envV)); break;
             default: throw new Exception($"Unknown Statement:" + stmt.ToString());
@@ -64,25 +69,25 @@ public class Interpreter {
 
     /* ________________________Statement Handlers______________________________*/
     
-    static private void HandleComposite (Composite c, EnvV envV) {
+    private static void HandleComposite (Composite c, EnvV envV, EnvH envH) {
         // Evaluates left subtree first
-        if(c.Stmt1 != null) EvalStmt(c.Stmt1, envV);
+        if(c.Stmt1 != null) EvalStmt(c.Stmt1, envV, envH);
         // Right subtree
-        if(c.Stmt2 != null) EvalStmt(c.Stmt2, envV);        
+        if(c.Stmt2 != null) EvalStmt(c.Stmt2, envV, envH);        
     }
 
-    static private void HandleIf(If ifNode, EnvV envV) {
+    private static void HandleIf(If ifNode, EnvV envV, EnvH envH) {
         //Evaluate condition to interpreter values
         Value condition = EvalExp(ifNode.Condition, envV);
 
         //Downcast and extract bool value, guarenteed by typechecking. Bodies will be skip
         if (condition.AsBool())
-            EvalStmt(ifNode.ThenBody, envV.NewScope()); //will be skip if empty {}
+            EvalStmt(ifNode.ThenBody, envV.NewScope(), envH); //will be skip if empty {}
         else 
-            EvalStmt(ifNode.ElseBody, envV.NewScope()); //will be skip if excluded or empty {}
+            EvalStmt(ifNode.ElseBody, envV.NewScope(), envH); //will be skip if excluded or empty {}
     }
 
-    static private void HandleVarDecl(VarDecl vdNode, EnvV envV) {
+    private static void HandleVarDecl(VarDecl vdNode, EnvV envV) {
 
         //bind identifier to a default value based on type
         Value value = GetDefaultValue(vdNode.Type);
@@ -114,7 +119,6 @@ public class Interpreter {
         
         //Due to side-effects of assignments, populate the propertylist from propertyScope.Lookup(id) after loop. Collect only the ids
         HashSet<string> declaredPropertyIds = new();
-
 
         foreach (Stmt stmt in resDecl.PropertyList) {
 
@@ -158,12 +162,38 @@ public class Interpreter {
             id => propertyScope.Lookup(id) 
         );
 
+        ResourceVal resource = new ResourceVal(resDecl.Identifier, resDecl.Type.Category, propertyList);
+
         //Finally Bind the resource to envV (not propertyScope)
-        envV.Bind(resDecl.Identifier, new ResourceVal(resDecl.Identifier, resDecl.Type.Category, propertyList));
+        envV.Bind(resDecl.Identifier, resource);
+
+        //Add resource to the global registry, indexed by its category
+        ResourceRegistry.Instance().AddResource(resDecl.Type.Category, resource);
     }
+
+    private static void ExecCategoryDecl(CategoryDecl categoryDecl, EnvH envH) {
+
+        //Add it to the registry, such that resources of this category can be added to it
+        ResourceRegistry.Instance().RegisterCategory(categoryDecl.CategoryId);        
+
+        //Relate it to its immediate super in envH
+        envH.EstablishRelation(categoryDecl.CategoryId, categoryDecl.ParentId);
+    }
+
+    private static void ExecMove(Move moveNode, EnvV envV) {
+
+        ResourceVal resourceToMove = (ResourceVal) envV.Lookup(moveNode.ResourceId);
+
+        //Move to the righ category in the registry
+        ResourceRegistry.Instance().MoveResource(resourceToMove, moveNode.Type.Category); 
+
+        //Update categoryId on the resource for easy, currently innit only. Fix
+        //resourceToMove.CategoryId = moveNode.Type.Category;
+    }
+
     /*_____________________Expression Handlers_____________________*/
 
-    static private Value EvalReference(Reference r, EnvV envV) {
+    private static Value EvalReference(Reference r, EnvV envV) {
         
         //Id case
         if (r.PropertyId == null) {
@@ -178,7 +208,7 @@ public class Interpreter {
         }        
     }
 
-    static private Value EvalAssignment(Assignment a, EnvV envV) {
+    private static Value EvalAssignment(Assignment a, EnvV envV) {
 
         //Extracting reference node for readability
         Reference reference = a.Variable;
@@ -202,7 +232,7 @@ public class Interpreter {
         return value;
     }
 
-    static private Value EvalBinary(BinaryOperation exp, EnvV envV) {
+    private static Value EvalBinary(BinaryOperation exp, EnvV envV) {
         Value left = EvalExp(exp.LeftExpression, envV);
 
         Value right = EvalExp(exp.RightExpression, envV);
@@ -338,7 +368,7 @@ public class Interpreter {
         };
     }
 
-    static private Value EvalUnary(UnaryOperation exp, EnvV envV) {
+    private static Value EvalUnary(UnaryOperation exp, EnvV envV) {
 
         //Evaluate inner expression
         Value value = EvalExp(exp.Expression, envV);
