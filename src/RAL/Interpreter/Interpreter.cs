@@ -1,5 +1,3 @@
-using System.ComponentModel;
-using System.Reflection.Metadata;
 using RAL.AST;
 
 namespace RAL.Interpreter;
@@ -111,11 +109,12 @@ public class Interpreter {
 
     private static void ExecResourceDecl(ResourceDecl resDecl, EnvV envV) {
 
-        //resource 'body' {} gets new scope for properties to refer to each other by simple name. { Number x; Number y = x; } 
+        //resource 'body' {} gets new scope for properties to refer to each other by simple name. { Number x; Number y = x = 2; } 
         EnvV propertyScope = envV.NewScope();
+        
+        //Due to side-effects of assignments, populate the propertylist from propertyScope.Lookup(id) after loop. Collect only the ids
+        HashSet<string> declaredPropertyIds = new();
 
-        //Initialize propertyList of coming ResourceVal 
-        Dictionary<string, Value> properties = new();
 
         foreach (Stmt stmt in resDecl.PropertyList) {
 
@@ -124,33 +123,44 @@ public class Interpreter {
                 case VarDecl vd: 
                 
                     Value defaultValue = GetDefaultValue(vd.Type);
-                    
-                    //Block scope for properties to refer to each other with simple name
+
                     propertyScope.Bind(vd.Identifier, defaultValue);
 
-                    //Add to list which is a part of the 
-                    properties.Add(vd.Identifier, defaultValue);
+                    //For poupulating ResourceVal's propertyList from propertyScope after loop. 
+                    declaredPropertyIds.Add(vd.Identifier);
+
                     break;
                 
                 //Case 2: property declaration with assignment
-                case Composite { Stmt1: VarDecl varDecl, Stmt2: ExpStmt exp}: //Property pattern matching, both must be met
+                case Composite { Stmt1: VarDecl varDecl, Stmt2: ExpStmt expStmt}: //Property pattern matching, both must be met
+                    
+                    //Bind lhs property id within scope, such that the reference of the assignment is bound when evaluating right hand side. 
+                    propertyScope.Bind(varDecl.Identifier, GetDefaultValue(varDecl.Type));
 
-                    //Block scope for properties to refer to each other with simple name
-                    propertyScope.Bind(varDecl.Identifier, null);
-                    
-                    Value assignmentValue = EvalExp(exp.Expression, propertyScope);
-                    
-                    //Block scope for properties to refer to each other with simple name
+                    //Recursively evaluates rhs of the assignment, including compound assignments                    
+                    Value assignmentValue = EvalExp(expStmt.Expression, propertyScope);
+
+                    //Set the actual value of lhs property id
                     propertyScope.Set(varDecl.Identifier, assignmentValue);
+
+                    //For poupulating ResourceVal's propertyList from propertyScope after loop. 
+                    declaredPropertyIds.Add(varDecl.Identifier);
                     
-                    properties.Add(varDecl.Identifier, assignmentValue);
                     break;
-            }                    
+            }   
         }
 
-        envV.Bind(resDecl.Identifier, new ResourceVal(resDecl.Identifier, resDecl.Type.Category, properties));
-    }
+        //From the newly bound variables in propertyScope, build the property list, by lookups in said scope of collected ids
+        Dictionary<string, Value> propertyList = declaredPropertyIds.ToDictionary(
+            //Key selector function:        From the elements (ids) of declaredIds HashSet, set it as the key of dictonary entry.
+            id => id, 
+            //Value selector function:      Value of new dictionary entry is set to the returned Value from a lookup in the propertyScope.
+            id => propertyScope.Lookup(id) 
+        );
 
+        //Finally Bind the resource to envV (not propertyScope)
+        envV.Bind(resDecl.Identifier, new ResourceVal(resDecl.Identifier, resDecl.Type.Category, propertyList));
+    }
     /*_____________________Expression Handlers_____________________*/
 
     static private Value EvalReference(Reference r, EnvV envV) {
@@ -178,7 +188,7 @@ public class Interpreter {
 
         //id case, write directly in envV
         if (reference.PropertyId == null) {
-            envV.Set(a.Variable.VariableId, value);         
+            envV.Set(reference.VariableId, value);         
         }
         //id.id case, must be a resource per type-checker
         else {
