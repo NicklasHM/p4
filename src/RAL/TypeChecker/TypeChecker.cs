@@ -68,17 +68,18 @@ class TypeChecker {
 
 /* ________________________Statement Handlers______________________________*/
     private void HandleComposite(Composite cmp, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
-        if(cmp.Stmt1 != null) StmtType(cmp.Stmt1, envV, envC, envH, envT, envR, envCPT);
-        if(cmp.Stmt2 != null) StmtType(cmp.Stmt2, envV, envC, envH, envT, envR, envCPT); 
+        StmtType(cmp.Stmt1, envV, envC, envH, envT, envR, envCPT); // composite null?
+        StmtType(cmp.Stmt2, envV, envC, envH, envT, envR, envCPT); // composite null?
     }
 
     private void HandleIf(If i, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         TypeT type = ExpType(i.Condition, envV, envC, envH, envT, envR, envCPT);
 
-        if(type is not BoolT) errors.Add($"If statement expects condition of type 'bool' got '{type.ToString()}'");
+        if(type is not BoolT) 
+            errors.Add($"If statement expects condition of type 'bool' got '{type.ToString()}'");
 
-        if(i.ThenBody != null) StmtType(i.ThenBody, envV.NewScope(), envC, envH, envT, envR, envCPT);        
-        if(i.ElseBody != null) StmtType(i.ElseBody, envV.NewScope(), envC, envH, envT, envR, envCPT);
+        StmtType(i.ThenBody, envV.NewScope(), envC, envH, envT, envR, envCPT); // empty body is skip node    
+        StmtType(i.ElseBody, envV.NewScope(), envC, envH, envT, envR, envCPT); // empty body is skip node  
     }
 
     private void HandleVarDecl(VarDecl decl, EnvV envV, EnvC envC) {
@@ -128,7 +129,7 @@ class TypeChecker {
         foreach (Stmt stmt in resDecl.PropertyList) { // loop over fields
             switch (stmt) {
                 case VarDecl varDecl: { // Field decl without assignment
-                    HandlePropertyDecl(resDecl, varDecl, propertyScope, envH, envR, envCPT, false);
+                    HandlePropertyDecl(resDecl, varDecl, propertyScope, envH, envR, envCPT);
                     break;
                 }
 
@@ -137,7 +138,7 @@ class TypeChecker {
                     Stmt2: ExpStmt exp      // guaranteed to be ExpStmt
                 }:  
 
-                    HandlePropertyDecl(resDecl, varDecl, propertyScope, envH, envR, envCPT, true);
+                    HandlePropertyDecl(resDecl, varDecl, propertyScope, envH, envR, envCPT);
 
                     TypeT expType = ExpType(exp.Expression, propertyScope, envC, envH, envT, envR, envCPT);
                     if (varDecl.Type != expType) errors.Add($"Variable '{varDecl.Identifier}' expected type '{varDecl.Type}' got '{expType}'");
@@ -145,9 +146,10 @@ class TypeChecker {
                     break;
             }
         }
+        
     }
 
-    private void HandlePropertyDecl(ResourceDecl resDecl, VarDecl varDecl, EnvV envV, EnvH envH, EnvR envR, EnvCPT envCPT, bool withAssignment) {
+    private void HandlePropertyDecl(ResourceDecl resDecl, VarDecl varDecl, EnvV envV, EnvH envH, EnvR envR, EnvCPT envCPT) {
         if (varDecl.Type is ResourceT || varDecl.Type is ReservationT) {
             errors.Add($"'{varDecl.Type}' not allowed as property type for resource.\n");
         } else {
@@ -160,7 +162,7 @@ class TypeChecker {
             bool boundR = envR.BindField(resDecl.Identifier, varDecl.Identifier, varDecl.Type);
             if(!boundR) errors.Add($"Property '{varDecl.Identifier}' has already been declared.");
             
-             //
+            // Check properties with same name of related resources to see if types differ
             CheckCategoryPropertyConflict(resDecl.Type, varDecl.Identifier, varDecl.Type, envH, envCPT);
 
         }
@@ -223,7 +225,11 @@ class TypeChecker {
     }
 
     private void HandleTemplateCall(TemplateCall tc, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
-        List<TypeT> formalParamTypes = envT.Lookup(tc.TemplateId);
+        List<TypeT>? formalParamTypes = envT.Lookup(tc.TemplateId);
+        if(formalParamTypes == null) {
+            errors.Add($"Use of undeclared template '{tc.TemplateId}'.");
+            return;
+        }
 
         if(formalParamTypes.Count != tc.ArgList.Count) {
             errors.Add($"{tc.TemplateId} expected {formalParamTypes.Count} argument(s) got {tc.ArgList.Count}");
@@ -250,7 +256,10 @@ class TypeChecker {
 
         // Ensure id to move maps to a resource. V(r) = Resource. 
         TypeT? type = envV.Lookup(move.ResourceId);
-        if(type == null) errors.Add($"Use of undeclared variable '{move.ResourceId}'.");
+        if(type == null) {
+            errors.Add($"Use of undeclared variable '{move.ResourceId}'.");
+            return;
+        }
         if(type is ResourceT) {
 
             //Ensure id of category maps to a category
@@ -339,8 +348,7 @@ class TypeChecker {
 
             else {
                 // invalid combination
-                errors.Add("Invalid resource specification"); // should never happen
-                isWellTyped = false;
+                throw new Exception("Invalid resource specification"); // should never happen
             }
         }
 
@@ -435,9 +443,9 @@ class TypeChecker {
         //Check all categories in subtree
        foreach (ResourceT related in envH.GetSubtree(category)) {
             
-            if (envCPT.HasProperty(related.Category, propertyId)) {
+            if (envCPT.HasProperty(related.Category, propertyId)) 
                 return envCPT.Lookup(related.Category, propertyId);
-            }
+            
         }
 
         return Error($"No resource in the category tree of '{category.Category}' declares a field '{propertyId}'.");
@@ -512,7 +520,7 @@ class TypeChecker {
             BinaryOperator.EQ or 
             BinaryOperator.NEQ => (left, right) switch {
                 (StringT, StringT) => new BoolT(),
-                (BoolT, BoolT)     => new BoolT(), // (4 < 7) == (7 > 11 and "hello" == "world")
+                (BoolT, BoolT)     => new BoolT(),
                 (NumberT, NumberT) => new BoolT(),
                 (DurationT, DurationT) => new BoolT(),
                 (DateTimeT, DateTimeT) => new BoolT(),

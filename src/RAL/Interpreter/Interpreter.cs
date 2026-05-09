@@ -58,8 +58,6 @@ public class Interpreter {
 
             Assignment a => EvalAssignment(a, envV),
 
-
-
             UnaryOperation u => EvalUnary(u, envV),
             BinaryOperation b => EvalBinary(b, envV),
 
