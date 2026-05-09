@@ -37,7 +37,7 @@ class TypeChecker {
 
             case Availability av: QueryIsWellTyped(av.Query, envV, envC, envH, envT, envR, envCPT); break; // QueryIsWellTyped adds errors itself, no need to check in case as well
             
-            default: throw new Exception("Unknown statement."); // should never happen
+            default: throw new Exception($"Line {stmt.LineNumber}: Unknown statement."); // should never happen
         }
     }
 
@@ -63,7 +63,7 @@ class TypeChecker {
             UnaryOperation u => HandleUnary(u, envV, envC, envH, envT, envR, envCPT),
 
 
-            _ => throw new Exception($"Unknown expression.") // should never happen
+            _ => throw new Exception($"Line {exp.LineNumber}: Unknown expression.") // should never happen
         };
 
 /* ________________________Statement Handlers______________________________*/
@@ -78,7 +78,7 @@ class TypeChecker {
         if (type is ErrorT) return;
 
         if(type is not BoolT) 
-            errors.Add($"If statement expects condition of type 'bool' got '{type.ToString()}'");
+            errors.Add($"Line {i.LineNumber}: If statement expected condition of type 'bool' got '{type.ToString()}'.");
 
         StmtType(i.ThenBody, envV.NewScope(), envC, envH, envT, envR, envCPT); // empty body is skip node    
         StmtType(i.ElseBody, envV.NewScope(), envC, envH, envT, envR, envCPT); // empty body is skip node  
@@ -87,7 +87,7 @@ class TypeChecker {
     private void HandleVarDecl(VarDecl decl, EnvV envV, EnvC envC) {
 
         bool bound = envV.Bind(decl.Identifier, decl.Type);
-        if(!bound) errors.Add($"Variable '{decl.Identifier}' already declared in current scope.");
+        if(!bound) errors.Add($"Line {decl.LineNumber}: Variable '{decl.Identifier}' already declared in current scope.");
     }
 
 
@@ -95,7 +95,7 @@ class TypeChecker {
 
         // Add the new category to the set; function returns bool indicating whether category has already been declared
         if(envC.AddCategory(cd.CategoryId) == false) {
-            errors.Add($"Category '{cd.CategoryId}' has already been declared.");
+            errors.Add($"Line {cd.LineNumber}: Category '{cd.CategoryId}' has already been declared.");
         }
 
         //Handle relation to parent - 'is a id' part of [category id is a id]. If no relation is explicitly provided, parent is 'Resource'
@@ -105,7 +105,7 @@ class TypeChecker {
             
             //Ensure parent is in the set of categories
             if(!envC.CategoryIsDeclared(cd.ParentId)) 
-                errors.Add($"Use of undeclared category '{cd.ParentId}'.");
+                errors.Add($"Line {cd.LineNumber}: Use of undeclared category '{cd.ParentId}'.");
 
             //Delegate establishment of parent relation to hierarchy environment. Guards cyclic relations
             envH.EstablishRelation(new ResourceT(cd.CategoryId), new ResourceT(cd.ParentId)); 
@@ -115,13 +115,13 @@ class TypeChecker {
     private void HandleResourceDecl(ResourceDecl resDecl, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         
         if(resDecl.Type is not ResourceT r) 
-            errors.Add($"Expected type 'resource' got '{resDecl.Type}'");
+            errors.Add($"Line {resDecl.LineNumber}: Expected type 'Resource' got '{resDecl.Type}'.");
 
         else if(!envC.CategoryIsDeclared(r.Category))
-            errors.Add($"Use of undeclared category '{r.Category}'");
+            errors.Add($"Line {resDecl.LineNumber}: Use of undeclared category '{r.Category}'.");
         
         bool bound = envV.Bind(resDecl.Identifier, resDecl.Type); // bind resource to variable environment
-        if(!bound) errors.Add($"Variable '{resDecl.Identifier}' already declared in current scope.");
+        if(!bound) errors.Add($"Line {resDecl.LineNumber}: Variable '{resDecl.Identifier}' already declared in current scope.");
 
         envR.RegisterResource(resDecl.Identifier); // Invariant: All resources must be registered in resource environment, important for property checking
 
@@ -143,7 +143,7 @@ class TypeChecker {
                     HandlePropertyDecl(resDecl, varDecl, propertyScope, envH, envR, envCPT);
 
                     TypeT expType = ExpType(exp.Expression, propertyScope, envC, envH, envT, envR, envCPT);
-                    if (varDecl.Type != expType) errors.Add($"Variable '{varDecl.Identifier}' expected type '{varDecl.Type}' got '{expType}'");
+                    if (varDecl.Type != expType) errors.Add($"Line {exp.LineNumber}: Variable '{varDecl.Identifier}' expected type '{varDecl.Type}' got '{expType}'.");
 
                     break;
             }
@@ -153,16 +153,16 @@ class TypeChecker {
 
     private void HandlePropertyDecl(ResourceDecl resDecl, VarDecl varDecl, EnvV envV, EnvH envH, EnvR envR, EnvCPT envCPT) {
         if (varDecl.Type is ResourceT || varDecl.Type is ReservationT) {
-            errors.Add($"'{varDecl.Type}' not allowed as property type for resource.\n");
+            errors.Add($"Line {varDecl.LineNumber}: '{varDecl.Type}' not allowed as property type for resource.");
         } else {
 
             //A new scope is passed so within the resource envV is used as lookup, when assigning
             bool bound = envV.Bind(varDecl.Identifier, varDecl.Type);  
-            if(!bound) errors.Add($"Variable '{varDecl.Identifier}' already declared in current scope.");
+            if(!bound) errors.Add($"Line {varDecl.LineNumber}: Variable '{varDecl.Identifier}' already declared in current scope.");
 
             //For use outside resource
             bool boundR = envR.BindField(resDecl.Identifier, varDecl.Identifier, varDecl.Type);
-            if(!boundR) errors.Add($"Property '{varDecl.Identifier}' has already been declared.");
+            if(!boundR) errors.Add($"Line {varDecl.LineNumber}: Property '{varDecl.Identifier}' has already been declared.");
             
             // Check properties with same name of related resources to see if types differ
             CheckCategoryPropertyConflict(resDecl.Type, varDecl.Identifier, varDecl.Type, envH, envCPT);
@@ -175,7 +175,7 @@ class TypeChecker {
         IEnumerable<ResourceT>? relatedList = envH.GetAllRelated(resDeclType);
 
         if(relatedList == null) {
-            errors.Add($"Use of undeclared category '{resDeclType.Category}'"); // message WIP
+            errors.Add($"Use of undeclared category '{resDeclType.Category}'."); // message WIP
             return;
         }
 
@@ -213,28 +213,28 @@ class TypeChecker {
 
             //Resource types, category must be declared
             if(param.Type is ResourceT r && !envC.CategoryIsDeclared(r.Category))
-                errors.Add($"Use of undeclared category '{r.ToString()}'.");
+                errors.Add($"Line {param.LineNumber}: Use of undeclared category '{r.ToString()}'.");
    
             paramTypes.Add(param.Type); // extract types from param list and add to template environment
             bool bound = tmplScope.Bind(param.Identifier, param.Type); // make formal parameters accessible (only) in template body
-            if(!bound) errors.Add($"Variable '{param.Identifier}' has already been declared in this scope.");
+            if(!bound) errors.Add($"Line {param.LineNumber}: Variable '{param.Identifier}' has already been declared in this scope.");
         }
         bool boundT = envT.Bind(tmplDecl.TemplateId, paramTypes); // bind template id to formal param types
-        if(!boundT) errors.Add($"Template '{tmplDecl.TemplateId}' already declared.");
+        if(!boundT) errors.Add($"Line {tmplDecl.LineNumber}: Template '{tmplDecl.TemplateId}' already declared.");
 
-        if(tmplDecl.TemplateBody != null) 
+        if(tmplDecl.TemplateBody != null) // skip? 
             StmtType(tmplDecl.TemplateBody, tmplScope, envC, envH, envT, envR, envCPT); // type check body. 
     }
 
     private void HandleTemplateCall(TemplateCall tc, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         List<TypeT>? formalParamTypes = envT.Lookup(tc.TemplateId);
         if(formalParamTypes == null) {
-            errors.Add($"Use of undeclared template '{tc.TemplateId}'.");
+            errors.Add($"Line {tc.LineNumber}: Use of undeclared template '{tc.TemplateId}'.");
             return;
         }
 
         if(formalParamTypes.Count != tc.ArgList.Count) {
-            errors.Add($"{tc.TemplateId} expected {formalParamTypes.Count} argument(s) got {tc.ArgList.Count}");
+            errors.Add($"Line {tc.LineNumber}: {tc.TemplateId} expected {formalParamTypes.Count} argument(s) got {tc.ArgList.Count}.");
         }
 
         if(formalParamTypes.Count == 0 || tc.ArgList.Count == 0) return;
@@ -247,11 +247,11 @@ class TypeChecker {
             
             if(actual is ResourceT a && expected is ResourceT e) { // if both are resources
                 if(!envH.IsSubtype(a, e)) // but not compatible types
-                    errors.Add($"Argument {i + 1} of template '{tc.TemplateId}' of type '{actual.ToString()}' is not compatible with '{expected.ToString()}'.");
+                    errors.Add($"Line {tc.LineNumber}: Argument {i + 1} of template '{tc.TemplateId}' of type '{actual.ToString()}' is not compatible with '{expected.ToString()}'.");
             }
             // If both not resources: check simple equality
             else if(expected != actual) {
-                errors.Add($"Argument {i + 1} of template '{tc.TemplateId}' expected '{expected.ToString()}' got '{actual.ToString()}'."); 
+                errors.Add($"Line {tc.LineNumber}: Argument {i + 1} of template '{tc.TemplateId}' expected '{expected.ToString()}' got '{actual.ToString()}'."); 
             }
         } 
     }
@@ -262,14 +262,14 @@ class TypeChecker {
         // Ensure id to move maps to a resource. V(r) = Resource. 
         TypeT? type = envV.Lookup(move.ResourceId);
         if(type == null) {
-            errors.Add($"Use of undeclared variable '{move.ResourceId}'.");
+            errors.Add($"Line {move.LineNumber}: Use of undeclared variable '{move.ResourceId}'.");
             return;
         }
         if(type is ResourceT) {
 
             //Ensure id of category maps to a category
             if(!envC.CategoryIsDeclared(move.Type.Category)) 
-                errors.Add($"Use of undeclared category '{move.Type.Category}'.");
+                errors.Add($"Line {move.LineNumber}: Use of undeclared category '{move.Type.Category}'.");
             
             //Before moving check for conflicts between the resource's property types and those of the category
             Dictionary<string, TypeT> propertyTypeMap = envR.GetPropertyTypeMap(move.ResourceId);
@@ -281,11 +281,11 @@ class TypeChecker {
 
             //Currently moving wether or not conflicts occur
             if(envV.ChangeCategory(move.ResourceId, new ResourceT(move.Type.Category)) == false) {
-                errors.Add($"Use of undeclared variable: '{move.ResourceId}'.");
+                errors.Add($"Line {move.LineNumber}: Use of undeclared variable: '{move.ResourceId}'.");
             }
 
         } else 
-            errors.Add($"Expected type 'Resource' got '{type.ToString()}'");
+            errors.Add($"Line {move.LineNumber}: Expected type 'Resource' got '{type.ToString()}'.");
     }
 
     private void HandleCancel(Cancel cancel, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
@@ -293,7 +293,8 @@ class TypeChecker {
 
         if (type is ErrorT) return;
 
-        if(type is not ReservationT) errors.Add($"Expected type 'Reservation' got: {type.ToString()}.");
+        if(type is not ReservationT) 
+            errors.Add($"Line {cancel.LineNumber}: Expected type 'Reservation' got: {type.ToString()}.");
     }
 
     /* ________________________END: Statement Handlers______________________________*/
@@ -331,12 +332,12 @@ class TypeChecker {
                 if(quantityType is ErrorT) return false;
 
                 if (quantityType is not NumberT) {
-                    errors.Add($"Expected type 'Number' got '{quantityType}");
+                    errors.Add($"Expected type 'Number' got '{quantityType}.");
                     isWellTyped = false;
                 }
 
                 if (!envC.CategoryIsDeclared(resourceSpec.CategoryId)) {
-                    errors.Add($"Use of undeclared category '{resourceSpec.CategoryId}'");
+                    errors.Add($"Use of undeclared category '{resourceSpec.CategoryId}'.");
                     isWellTyped = false;
                 }
 
@@ -350,17 +351,20 @@ class TypeChecker {
             else if (resourceSpec.Identifier != null && resourceSpec.Quantity == null) {
                 TypeT? type = envV.Lookup(resourceSpec.Identifier);
 
-                if(type == null) 
-                    errors.Add($"Use of undeclared variable '{resourceSpec.Identifier}'");
+                if(type == null) {
+                    errors.Add($"Use of undeclared variable '{resourceSpec.Identifier}'.");
+                    isWellTyped = false;
+                    continue;
+                }
                 if (type is not ResourceT) {
-                    errors.Add($"Expected type 'Resource' got '{resourceSpec.Identifier}'");
+                    errors.Add($"Expected type 'Resource' got '{type}'.");
                     isWellTyped = false;
                 }
             }
 
             else {
                 // invalid combination
-                throw new Exception("Invalid resource specification"); // should never happen
+                throw new Exception("Invalid resource specification."); // should never happen
             }
         }
 
@@ -376,7 +380,7 @@ class TypeChecker {
         return (fromType, toType) switch {
             (DateTimeT, DateTimeT) => true, // dt to dt
             (DateTimeT, DurationT) => true, // dt for dur
-            _  => Error($"Types {fromType.ToString()} and {toType.ToString()} incompatible with interval expression", false)
+            _  => Error($"Types {fromType.ToString()} and {toType.ToString()} incompatible with interval expression.", false)
         };
     }
 
@@ -389,7 +393,7 @@ class TypeChecker {
 
         return condType switch {
             BoolT => true,
-            _  => Error($"Condition expected type 'bool' got '{condType.ToString()}'", false)
+            _  => Error($"Line {condition.LineNumber}: Condition expected type 'bool' got '{condType.ToString()}'.", false)
         };
     }
 
@@ -427,7 +431,7 @@ class TypeChecker {
         //id case
         if (referenceNode.PropertyId == null) {
             TypeT? type = envV.Lookup(referenceNode.VariableId);
-            if(type == null) return Error($"Use of undeclared variable '{referenceNode.VariableId}'.");
+            if(type == null) return Error($"Line {referenceNode.LineNumber}: Use of undeclared variable '{referenceNode.VariableId}'.");
             return type;
         }
         //id.id case   
@@ -440,10 +444,10 @@ class TypeChecker {
         
         //Guard: Ensure that the variable is a resource type. Only these should allow property access.
         TypeT? varType = envV.Lookup(reference.VariableId);
-        if(varType == null) return Error($"Use of undeclared variable '{reference.VariableId}'.");
+        if(varType == null) return Error($"Line {reference.LineNumber}: Use of undeclared variable '{reference.VariableId}'.");
  
         if (varType is not ResourceT resource) {
-            return Error($"Cannot access property '{reference.PropertyId}' on non-resource '{reference.VariableId}'.");
+            return Error($"Line {reference.LineNumber}: Cannot access property '{reference.PropertyId}' on non-resource '{reference.VariableId}'.");
         }
 
         // Case 1: Declared resources. Upon declaration, reglardless of having fields, a resource is registered to envR.
@@ -451,7 +455,7 @@ class TypeChecker {
 
             // id.id cases.'PropertyId' can never be null given case from which this method is invoked in HandleReference
             TypeT? type = envR.LookupField(reference.VariableId, reference.PropertyId);
-            if(type == null) return Error($"Property '{reference.PropertyId}' doesn't exist in resource '{reference.VariableId}'");
+            if(type == null) return Error($"Line {reference.LineNumber}: Property '{reference.PropertyId}' doesn't exist in resource '{reference.VariableId}'.");
             return type;
         }
 
@@ -481,11 +485,11 @@ class TypeChecker {
         if (expType is ErrorT) return expType;
         
         if (varType is ResourceT) 
-            errors.Add($"Assignment of expression to resource not allowed");
+            errors.Add($"Line {assign.LineNumber}: Assignment to variable of type 'Resource' not allowed.");
 
         if (expType != varType) 
         /*  Message with ??:        if propertyId not null return it, otherwise return variableId  to*/
-            errors.Add($"Variable '{assign.Variable.PropertyId ?? assign.Variable.VariableId}' " +
+            errors.Add($"Line {assign.LineNumber}: Variable '{assign.Variable.PropertyId ?? assign.Variable.VariableId}' " +
                        $"expected type '{varType.ToString()}' got '{expType.ToString()}'."
             );
 
@@ -500,7 +504,7 @@ class TypeChecker {
         if (expType is ErrorT) return expType;
 
         if(expType is ReservationT) return new ReservationT();
-        return Error($"Reschedule expected type 'Reservation' got '{expType}'");
+        return Error($"Line {r.LineNumber}: Reschedule expected type 'Reservation' got '{expType}'.");
         
     }
 
@@ -521,13 +525,13 @@ class TypeChecker {
             BinaryOperator.SUB => (left, right) switch {
                 (NumberT, NumberT)     => new NumberT(),   // num + num
                 (DateTimeT, DurationT) => new DateTimeT(), // dt + dur
-                _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
+                _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for operator '{operatorAsString}'.")},
 
             // * /
             BinaryOperator.MUL or 
             BinaryOperator.DIV => (left, right) switch {
                 (NumberT, NumberT) => new NumberT(), // num */ num
-                _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
+                _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for operator '{operatorAsString}'.")},
             
             // <, >, 
             BinaryOperator.LT   or // <
@@ -537,7 +541,7 @@ class TypeChecker {
                 (NumberT, NumberT) => new BoolT(),
                 (DateTimeT, DateTimeT) => new BoolT(),
                 (DurationT, DurationT) => new BoolT(),
-                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
+                _ => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for operator '{operatorAsString}'.")},
 
             BinaryOperator.EQ or 
             BinaryOperator.NEQ => (left, right) switch {
@@ -546,18 +550,18 @@ class TypeChecker {
                 (NumberT, NumberT) => new BoolT(),
                 (DurationT, DurationT) => new BoolT(),
                 (DateTimeT, DateTimeT) => new BoolT(),
-                _  => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
+                _  => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for operator '{operatorAsString}'.")},
 
             BinaryOperator.OR or BinaryOperator.AND => (left, right) switch {
                 (ReservationT, ReservationT) => new ReservationT(), // reserve [...] and reserve [...]
                 (BoolT, BoolT)               => new BoolT(),        // 4 < 7 and 7 < 11
-                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
+                _ => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for operator '{operatorAsString}'.")},
 
             BinaryOperator.SEQ => (left, right) switch {
                 (ReservationT, ReservationT) => new ReservationT(),
-                _ => Error($"Operand types '{left}' and '{right}' incompatible for '{operatorAsString}'")},
+                _ => Error($"Line {exp.LeftExpression.LineNumber}: Operand types '{left}' and '{right}' incompatible for operator '{operatorAsString}'.")},
 
-            _ => throw new Exception("Unknown binary operator.") // should never happen      
+            _ => throw new Exception($"Line {exp.LeftExpression.LineNumber}: Unknown binary operator.") // should never happen      
         };
     }
 
@@ -569,12 +573,12 @@ class TypeChecker {
         string operatorAsString = EnumToOp(exp.Operator);
         return exp.Operator switch {
             UnaryOperator.NOT when (operandType is BoolT) => new BoolT(),
-            UnaryOperator.NOT => Error($"Operator '{operatorAsString}' expected 'Bool' got '{operandType}'"),
+            UnaryOperator.NOT => Error($"Line {exp.LineNumber}: Operator '{operatorAsString}' expected 'Bool' got '{operandType}'."),
 
             UnaryOperator.NEG when (operandType is NumberT) => new NumberT(),
-            UnaryOperator.NEG => Error($"Operator '{operatorAsString}' expected 'Number' got '{operandType}'"),
+            UnaryOperator.NEG => Error($"Line {exp.LineNumber}: Operator '{operatorAsString}' expected 'Number' got '{operandType}'."),
             
-            _ => throw new Exception("Unknown unary operator.") // should never happen
+            _ => throw new Exception($"Line {exp.LineNumber}: Unknown unary operator.") // should never happen
         };
     }
 
