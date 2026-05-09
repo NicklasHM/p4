@@ -75,6 +75,8 @@ class TypeChecker {
     private void HandleIf(If i, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         TypeT type = ExpType(i.Condition, envV, envC, envH, envT, envR, envCPT);
 
+        if (type is ErrorT) return;
+
         if(type is not BoolT) 
             errors.Add($"If statement expects condition of type 'bool' got '{type.ToString()}'");
 
@@ -239,6 +241,9 @@ class TypeChecker {
         for (int i = 0; i < formalParamTypes.Count; i++) { // could loop over formal or actual parameter count: they are interchangable at this point
             TypeT expected = formalParamTypes[i];
             TypeT actual = ExpType(tc.ArgList[i], envV, envC, envH, envT, envR, envCPT);
+
+            if (actual is ErrorT)
+                continue;
             
             if(actual is ResourceT a && expected is ResourceT e) { // if both are resources
                 if(!envH.IsSubtype(a, e)) // but not compatible types
@@ -285,6 +290,9 @@ class TypeChecker {
 
     private void HandleCancel(Cancel cancel, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         TypeT type = ExpType(cancel.Reservation, envV, envC, envH, envT, envR, envCPT);
+
+        if (type is ErrorT) return;
+
         if(type is not ReservationT) errors.Add($"Expected type 'Reservation' got: {type.ToString()}.");
     }
 
@@ -320,6 +328,8 @@ class TypeChecker {
     
                 TypeT quantityType = ExpType(resourceSpec.Quantity, envV, envC, envH, envT, envR, envCPT);
 
+                if(quantityType is ErrorT) return false;
+
                 if (quantityType is not NumberT) {
                     errors.Add($"Expected type 'Number' got '{quantityType}");
                     isWellTyped = false;
@@ -339,7 +349,9 @@ class TypeChecker {
             // "id"
             else if (resourceSpec.Identifier != null && resourceSpec.Quantity == null) {
                 TypeT? type = envV.Lookup(resourceSpec.Identifier);
-                if(type == null) errors.Add($"Use of undeclared variable '{resourceSpec.Identifier}'");
+
+                if(type == null) 
+                    errors.Add($"Use of undeclared variable '{resourceSpec.Identifier}'");
                 if (type is not ResourceT) {
                     errors.Add($"Expected type 'Resource' got '{resourceSpec.Identifier}'");
                     isWellTyped = false;
@@ -357,6 +369,9 @@ class TypeChecker {
     private bool TimeSpecIsWellTyped(TimeSpec timeSpec, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         TypeT fromType = ExpType(timeSpec.Start, envV, envC, envH, envT, envR, envCPT );
         TypeT toType = ExpType(timeSpec.EndMarker, envV, envC, envH, envT, envR, envCPT);
+
+        if (fromType is ErrorT || toType is ErrorT)
+            return false;
         
         return (fromType, toType) switch {
             (DateTimeT, DateTimeT) => true, // dt to dt
@@ -369,6 +384,9 @@ class TypeChecker {
         if(condition == null) return true; // cannot be illtyped if not present
 
         TypeT condType = ExpType(condition, envV, envC, envH, envT, envR, envCPT);
+
+        if (condType is ErrorT) return false;
+
         return condType switch {
             BoolT => true,
             _  => Error($"Condition expected type 'bool' got '{condType.ToString()}'", false)
@@ -380,6 +398,10 @@ class TypeChecker {
 
         TypeT everyType = ExpType(recurrence.EveryDuration, envV, envC, envH, envT, envR, envCPT);
         TypeT endType = ExpType(recurrence.EndMarker, envV, envC, envH, envT, envR, envCPT);
+
+        if (everyType is ErrorT || endType is ErrorT)
+            return false;
+
         return (everyType, endType) switch {
             (DurationT, DateTimeT) => true, // needs way to distinguish between for/until
             (DurationT, DurationT) => true,
