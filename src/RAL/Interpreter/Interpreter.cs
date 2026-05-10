@@ -1,3 +1,4 @@
+using System.Dynamic;
 using Microsoft.Win32;
 using RAL.AST;
 using RAL.TC;
@@ -36,17 +37,24 @@ public class Interpreter {
             case VarDecl vd: HandleVarDecl(vd, envV); break;
 
             case CategoryDecl cd: ExecCategoryDecl(cd, envH); break;
-            case ResourceDecl rd: ExecResourceDecl(rd, envV); break;
+            case ResourceDecl rd: ExecResourceDecl(rd, envV, envH); break;
+
+            //case TemplateDecl
+            //case TemplateCall
 
             case Move m: ExecMove(m, envV); break;
 
-            case ExpStmt s: Console.WriteLine(EvalExp(s.Expression, envV)); break;
+            //case Cancel c: 
+
+            case ExpStmt s: Console.WriteLine(EvalExp(s.Expression, envV, envH)); break;
+
+            // case Availability av
             default: throw new Exception($"Unknown Statement: " + stmt.ToString());
         }
     }
 
     //Evaluates and returns an expression. Pattern matching on the AST nodes
-    public static Value EvalExp(Exp exp, EnvV envV) {
+    public static Value EvalExp(Exp exp, EnvV envV, EnvH envH) {
         return exp switch {
             NumberV n => new NumberVal(n.Value),
             BoolV b => new BoolVal(b.Value),
@@ -55,11 +63,15 @@ public class Interpreter {
             DurationV dur => new DurationVal(dur.Value),
 
             Reference r => EvalReference(r, envV),
+            
+            //Reserve reserveNode => EvalReserve(reserveNode.Query,)
+            // reschedule join
 
-            Assignment a => EvalAssignment(a, envV),
+            Assignment a => EvalAssignment(a, envV, envH),
 
             UnaryOperation u => EvalUnary(u, envV),
-            BinaryOperation b => EvalBinary(b, envV),
+            BinaryOperation b => EvalBinary(b, envV, envH), //  (reserve1, reserve2) defined for or, and, seq. Returns a composite reservation
+
 
             _ => throw new Exception($"Line {exp.LineNumber}: Unsupported expression.")
         };
@@ -76,7 +88,7 @@ public class Interpreter {
 
     private static void HandleIf(If ifNode, EnvV envV, EnvH envH) {
         //Evaluate condition to interpreter values
-        Value condition = EvalExp(ifNode.Condition, envV);
+        Value condition = EvalExp(ifNode.Condition, envV, envH);
 
         //Downcast and extract bool value, guarenteed by typechecking. Bodies will be skip
         if (condition.AsBool())
@@ -110,7 +122,7 @@ public class Interpreter {
             _ => throw new Exception("VarDecl node with unsupported type")
         };
 
-    private static void ExecResourceDecl(ResourceDecl resDecl, EnvV envV) {
+    private static void ExecResourceDecl(ResourceDecl resDecl, EnvV envV, EnvH envH) {
 
         //resource 'body' {} gets new scope for properties to refer to each other by simple name. { Number x; Number y = x = 2; } 
         EnvV propertyScope = envV.NewScope();
@@ -140,7 +152,7 @@ public class Interpreter {
                     propertyScope.Bind(varDecl.Identifier, GetDefaultValue(varDecl.Type));
 
                     //Recursively evaluates rhs of the assignment, including compound assignments                    
-                    Value assignmentValue = EvalExp(expStmt.Expression, propertyScope);
+                    Value assignmentValue = EvalExp(expStmt.Expression, propertyScope, envH);
 
                     //Set the actual value of lhs property id
                     propertyScope.Set(varDecl.Identifier, assignmentValue);
@@ -206,13 +218,13 @@ public class Interpreter {
         }        
     }
 
-    private static Value EvalAssignment(Assignment a, EnvV envV) {
+    private static Value EvalAssignment(Assignment a, EnvV envV, EnvH envH) {
 
         //Extracting reference node for readability
         Reference reference = a.Variable;
 
         //Evaluate right hand side expression
-        Value value = EvalExp(a.Expression, envV);
+        Value value = EvalExp(a.Expression, envV, envH);
 
         //id case, write directly in envV
         if (reference.PropertyId == null) {
@@ -230,12 +242,79 @@ public class Interpreter {
         return value;
     }
 
-    private static Value EvalBinary(BinaryOperation exp, EnvV envV) {
-        Value left = EvalExp(exp.LeftExpression, envV);
+    //Right operand Exp rightExp is intentionally not evaluated here. 
+    private static ReservationVal EvalBinaryReserve(BinaryOperator op, ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
 
-        Value right = EvalExp(exp.RightExpression, envV);
+        return op switch {
 
-        return exp.Operator switch {
+            BinaryOperator.OR => EvalBinaryReserve(leftReservation, rightExp, envV, envH),
+
+            BinaryOperator.AND => EvalReserveAND(leftReservation, rightExp, envV, envH),
+
+            BinaryOperator.SEQ => EvalReserveSEQ(leftReservation, rightExp, envV, envH),
+
+            _ => throw new Exception("Unexpected operator in reservation binary")
+            
+        };
+        
+    }
+
+    /// <summary> Short cirquit evaluation  </summary>
+    private static ReservationVal EvalReserveOR(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH) {
+        
+        // Only attempt right reserve expression if left failed
+        if (leftReservation.Failed()) 
+            return (ReservationVal) EvalExp(rightExp, envV, envH);
+
+        else //left reserve attempt did not fail, return it without having attempted reserving right
+            return leftReservation; 
+        
+    }
+
+    private static ReservationVal EvalReserveAND(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
+
+        //Case 1: left failed, don't attempt right. No reservations to delete. The empty list in left indicates a failure.
+        if (leftReservation.Failed()) 
+            return leftReservation;
+
+        //
+        ReservationVal rightReservation = (ReservationVal) EvalExp(rightExp, envV, envH);
+
+        //Case 2: left succeded, right failed.
+        if (rightReservation.Failed()) {
+
+            // Delete all reservatiosn in left. 
+        }
+
+        //Case 3: both succeded
+        else {
+
+            //Concatenate the reservationList
+        }        
+    }
+
+    private static  ReservationVal EvalReserveSEQ(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
+
+    }
+
+    private static Value EvalBinary(BinaryOperation exp, EnvV envV, EnvH envH) {
+        
+        // Always evaluate left - needed regardless of operator or overload
+        Value left = EvalExp(exp.LeftExpression, envV, envH);
+
+        /*Intercept Reservation typed operations, as righ operand should NOT be evaluated for:
+            "or" - when first goes through
+            "and" - when left operand doesn't go through */
+
+        if (left is ReservationVal leftReservation &&  //Below check not needed per typechecking, exceptions wished for logic errors.
+            exp.Operator is BinaryOperator.AND or BinaryOperator.OR or BinaryOperator.SEQ
+        ) {
+             return EvalBinaryReserve(exp.Operator, leftReservation, exp.RightExpression, envV, envH);            
+        }
+
+        Value right = EvalExp(exp.RightExpression, envV, envH);
+
+        return exp.Operator switch {           
 
             /*________________Arithmetic operations_______________*/
             
@@ -362,14 +441,14 @@ public class Interpreter {
 
             // Reserve and seq
 
-            _ => throw new Exception($"Line {exp.LineNumber}: Invalid binary operation.") // Should never happen
+            _ => throw new Exception($"Line {exp.LineNumber}: Invalid binary operation: {left} {exp.Operator} {right}\n.") // Should never happen
         };
     }
 
-    private static Value EvalUnary(UnaryOperation exp, EnvV envV) {
+    private static Value EvalUnary(UnaryOperation exp, EnvV envV, EnvH envH) {
 
         //Evaluate inner expression
-        Value value = EvalExp(exp.Expression, envV);
+        Value value = EvalExp(exp.Expression, envV, envH);
 
         return exp.Operator switch {
             UnaryOperator.NOT when value is BoolVal b

@@ -100,7 +100,11 @@ record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateT
 /// An empty list indicates a "rejected" reservation attempt 
 /// </summary>
 /// <param name="Reservations"></param>
-record ReservationVal( List<ReservationAtomVal> Reservations) : Value;
+record ReservationVal( List<ReservationAtomVal> Reservations) : Value {
+
+    public bool Failed() { return this.Reservations.Count == 0; }
+
+}
 
 
 /*  
