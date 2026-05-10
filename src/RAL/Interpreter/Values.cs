@@ -62,6 +62,8 @@ record DurationVal(TimeSpan Value) : Value
 
 //CategoryId for move to avoid linear search of every list in Categories,     property id -> value
 public record ResourceVal(string ResourceId, string CategoryId, Dictionary<string , Value> Properties) : Value {
+
+    public string CategoryId {get; set;} = CategoryId; // this.CategoryId set to parameter CategoryId
     public override string ToString() {
     
         string r = $"{CategoryId}: {ResourceId} {{ \n";
@@ -86,7 +88,11 @@ Dictionary<string, List<ResourceVal>> ResourcesByCategory
 
 // 2 DoubleRoom dr and 3 Room ... time ...
 //Alternative one resourceVal and make it composite reservation i.e. ReservationVal, drawback cannot reschedule
-record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateTimeVal End );
+record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateTimeVal End ) {
+    public DateTimeVal Start {get; set;} = Start;
+    public DateTimeVal End {get; set;} = End;
+}
+
 
 /// <summary>
 /// All reservations are treated equally like this. 

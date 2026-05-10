@@ -222,8 +222,7 @@ class TypeChecker {
         bool boundT = envT.Bind(tmplDecl.TemplateId, paramTypes); // bind template id to formal param types
         if(!boundT) errors.Add($"Line {tmplDecl.LineNumber}: Template '{tmplDecl.TemplateId}' already declared.");
 
-        if(tmplDecl.TemplateBody != null) // skip? 
-            StmtType(tmplDecl.TemplateBody, tmplScope, envC, envH, envT, envR, envCPT); // type check body. 
+        StmtType(tmplDecl.TemplateBody, tmplScope, envC, envH, envT, envR, envCPT); // type check body. 
     }
 
     private void HandleTemplateCall(TemplateCall tc, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {

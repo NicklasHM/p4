@@ -1,6 +1,3 @@
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
-
 namespace RAL.Interpreter;
 
 //CategoryId -> Resources of category

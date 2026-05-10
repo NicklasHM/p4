@@ -41,7 +41,7 @@ public class Interpreter {
             case Move m: ExecMove(m, envV); break;
 
             case ExpStmt s: Console.WriteLine(EvalExp(s.Expression, envV)); break;
-            default: throw new Exception($"Unknown Statement:" + stmt.ToString());
+            default: throw new Exception($"Unknown Statement: " + stmt.ToString());
         }
     }
 
@@ -186,7 +186,7 @@ public class Interpreter {
         ResourceRegistry.Instance().MoveResource(resourceToMove, moveNode.Type.Category); 
 
         //Update categoryId on the resource for easy, currently innit only. Fix
-        //resourceToMove.CategoryId = moveNode.Type.Category;
+        resourceToMove.CategoryId = moveNode.Type.Category;
     }
 
     /*_____________________Expression Handlers_____________________*/

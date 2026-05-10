@@ -53,5 +53,4 @@ class Program {
             Console.WriteLine($"Parsing failed with {parser.errors.count} error(s).");
         }
     }
-    
 }
