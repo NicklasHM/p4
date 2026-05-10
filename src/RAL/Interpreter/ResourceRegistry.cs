@@ -16,23 +16,23 @@ public class ResourceRegistry {
     //Private constructor initializing registry data structure
     private ResourceRegistry() {
 
-        _registry = new Dictionary<string, HashSet<ResourceVal>>()  { { "Resource", new HashSet<ResourceVal>() }
-    };
+        _registry = new Dictionary<string, HashSet<ResourceVal>>() { { "Resource", new HashSet<ResourceVal>() } };
         
     }
 
     //Method to access singleton, which is otherwise private
     public static ResourceRegistry Instance() { return instance;  }
 
+/// <summary> Moves a resource ot another category/// </summary>
+    public void MoveResource(ResourceVal resource, string newCategoryId) {
+        GetResourceList(resource.CategoryId).Remove(resource);
+        AddResource(newCategoryId, resource);
+    }
+
     /// <summary> Adds a resource to a category </summary>
     public void AddResource(string categoryId, ResourceVal resource) {
 
         GetResourceList(categoryId).Add(resource);
-    }
-
-    public void MoveResource(ResourceVal resource, string newCategoryId) {
-        GetResourceList(resource.CategoryId).Remove(resource);
-        AddResource(newCategoryId, resource);
     }
 
     private HashSet<ResourceVal> GetResourceList(string categoryId) {
