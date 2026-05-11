@@ -69,7 +69,7 @@ public class Interpreter {
 
             Assignment a => EvalAssignment(a, envV, envH),
 
-            UnaryOperation u => EvalUnary(u, envV),
+            UnaryOperation u => EvalUnary(u, envV, envH),
             BinaryOperation b => EvalBinary(b, envV, envH), //  (reserve1, reserve2) defined for or, and, seq. Returns a composite reservation
 
 
@@ -247,7 +247,7 @@ public class Interpreter {
 
         return op switch {
 
-            BinaryOperator.OR => EvalBinaryReserve(leftReservation, rightExp, envV, envH),
+            BinaryOperator.OR => EvalReserveOR(leftReservation, rightExp, envV, envH),
 
             BinaryOperator.AND => EvalReserveAND(leftReservation, rightExp, envV, envH),
 
@@ -290,11 +290,12 @@ public class Interpreter {
         else {
 
             //Concatenate the reservationList
-        }        
+        }      
+        return leftReservation;//stub for compiler errors  
     }
 
     private static  ReservationVal EvalReserveSEQ(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
-
+        return leftReservation;//stub for compiler errors  
     }
 
     private static Value EvalBinary(BinaryOperation exp, EnvV envV, EnvH envH) {
