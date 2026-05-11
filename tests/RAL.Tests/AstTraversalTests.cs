@@ -194,7 +194,7 @@ public class AstTraversalTests
         Assert.Equal("myRoom", resourceDecl.Identifier);
         var resourceType = Assert.IsType<ResourceT>(resourceDecl.Type);
         Assert.Equal("Room", resourceType.Category);
-        Assert.Null(resourceDecl.PropertyList);  // empty body {}
+        Assert.Empty(resourceDecl.PropertyList);  // empty body {}
     }
 
     [Fact]
