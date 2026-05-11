@@ -238,54 +238,69 @@ public class Interpreter {
         return value;
     }
 
+/// <summary> Evaluates reserve leaf nodes, covering two cases. 1: simple, 2: with recurring </summary>
     private static ReservationVal EvalReserve(Reserve reserveNode, EnvV envV, EnvH envH) {
-        (int lineNumber, QueryData query) = reserveNode;
+        QueryData originalQuery = reserveNode.Query;        
 
-        /* List of ResourceSpec, elements guarenteed by subclassing
-         - a * CategoryId id    (quantity of a category (or subtypes) + local var binding)      (CategorySpecWithBinding)
-         - a * CategoryId       (quantity of a category(or subtypes)  - no local var binding)   (CategorySpec)
-         - ResourceId           (previously declared resource)                                  (ResourceInstanceSpec)
-        */
+        //Extract reservation time period for the base query
+        (DateTime originalStart, DateTime originalEnd, TimeSpan duration) = ComputeTime(originalQuery.Interval, envV, envH);
+
+        //Treat all queries equally. Wether an AST without recurring or simulated for requrrence         
+        ResolvedQuery baseQuery = new ResolvedQuery(originalQuery.ResourceSpecs, originalStart, originalEnd, originalQuery.Condition);
+
+        ReservationVal result = ExecuteSingleReservation(baseQuery, envV, envH); 
+
+        //Case 1: Simple reserve node, no recurring
+        if (originalQuery.Recurrence == null) {
+            return result;
+        } 
         
-
-        //Extract timespec 
-        (DateTime start, DateTime end) = ComputeTimePeriod(query.Interval, envV, envH);
+        //Case 2: reserve node with recurring -> simmulate making queryData objects of nodes. Resolved queries shows purpose here.
         
+        List<ResolvedQuery> timeSlots = new() { baseQuery };
+        (TimeSpan timeBetween, DateTime recurrenceEnd) = ComputeRecurrencePeriod(originalQuery.Recurrence.Time, originalStart, envV, envH);
+        
+        //Accumulate each simple reservation request, starting from the second reservation occurrence.
+        for (DateTime slotStart = originalStart + timeBetween; slotStart < recurrenceEnd; slotStart += timeBetween) {
 
-
-        if (query.Recurrence != null){
-            (TimeSpan intervalBetween, DateTime recurrenceEnd) = ComputeRecurrencePeriod(query.Recurrence.Time, start, envV, envH);
-            
-            for (DateTime currentStart = start + intervalBetween; currentStart < recurrenceEnd; currentStart += intervalBetween) {
-
-                switch (query.Recurrence.Mode)
-                {
-                case RecurrenceMode.FLEXIBLE: //EvalReserveSEQ, with the queryData without the recurrence, start and end times for this itteration
-                        break;
-
-                    case RecurrenceMode.STRICT: //EvalReserveAND, , with the queryData without the recurrence, start and end times for this itteration
-                        break;
-                    
-                };
-                
-            }
+            timeSlots.Add(baseQuery with {Start = slotStart, End = slotStart + duration}); 
         }
 
-        //for compiler currently
-        return new ReservationVal(new List<ReservationAtomVal>());
+        foreach (ResolvedQuery slot in timeSlots.Skip(1)) {
+            result = originalQuery.Recurrence.Mode switch {
+                RecurrenceMode.STRICT => EvalReserveAND(result, () => ExecuteSingleReservation(slot, envV, envH)),
+                RecurrenceMode.FLEXIBLE => EvalReserveSEQ(result, () => ExecuteSingleReservation(slot, envV, envH)),
+                _ => throw new Exception("Unknown recurrence mode")
+            };
+        }
+        return result;
+    }
+
+     private static ReservationVal ExecuteSingleReservation(ResolvedQuery query, EnvV envV, EnvH envH) {
+        /*var validCombination = FindAvailableResources(query, envV, envH);
+        
+        if (validCombination.Any()) {
+            // Commit to registry
+            ReservationVal newReservation = new ReservationVal(validCombination);
+            ReservationRegistry.Instance().AddReservation(newReservation);
+            return newReservation;
+        }
+        */
+        
+        return new ReservationVal(new List<ReservationAtomVal>()); // Failed
     }
 
     /// <summary> Returns a tupple of start DateTime and end DateTime in unwrapped, c# types </summary>
-    private static (DateTime, DateTime) ComputeTimePeriod(TimeSpec timeSpec, EnvV envV, EnvH envH){
+    private static (DateTime, DateTime, TimeSpan) ComputeTime(TimeSpec timeSpec, EnvV envV, EnvH envH){
 
         //Evaluate the expressions within timespec
         Value startVal = EvalExp(timeSpec.Start, envV, envH);
         Value endMarkerVal = EvalExp(timeSpec.EndMarker, envV, envH);
 
         //Return unwrapped c#
-        return (startVal, endMarkerVal) switch {
-            (DateTimeVal start, DateTimeVal to) => (start.Value, to.Value),
-            (DateTimeVal start, DurationVal For) =>(start.Value, start.Value + For.Value),
+        return (startVal, endMarkerVal) switch {   //start dt  ,    end dt   , duration of reservation
+            (DateTimeVal start, DateTimeVal to) => (start.Value, to.Value,  to.Value - start.Value),
+            (DateTimeVal start, DurationVal For) =>(start.Value, start.Value + For.Value, For.Value),
             _ => throw new Exception("Invalid time specification.\n") 
         };
 
@@ -309,16 +324,16 @@ public class Interpreter {
         };
     }
 
-    //Right operand Exp rightExp is intentionally not evaluated here. 
+    /// <summary> Regular path: Coming from a binary operation node. Right operand Exp rightExp is intentionally not evaluated here. </summary>
     private static ReservationVal EvalBinaryReserve(BinaryOperator op, ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
 
         return op switch {
 
             BinaryOperator.OR => EvalReserveOR(leftReservation, rightExp, envV, envH),
 
-            BinaryOperator.AND => EvalReserveAND(leftReservation, rightExp, envV, envH),
+            BinaryOperator.AND => EvalReserveAND(leftReservation, () => (ReservationVal) EvalExp(rightExp, envV, envH)),
 
-            BinaryOperator.SEQ => EvalReserveSEQ(leftReservation, rightExp, envV, envH),
+            BinaryOperator.SEQ => EvalReserveSEQ(leftReservation, () => (ReservationVal) EvalExp(rightExp, envV, envH)),
 
             _ => throw new Exception("Unexpected operator in reservation binary")
             
@@ -335,33 +350,48 @@ public class Interpreter {
 
         else //left reserve attempt did not fail, return it without having attempted reserving right
             return leftReservation; 
-        
     }
 
-    private static ReservationVal EvalReserveAND(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
+    /// <summary> Both must succeed. Rolls back left if right fails. 
+    /// Two paths lead here: 1. Binary AND operation, 2. STRICT reccurrence evaluation from a leaf. </summary>
+    private static ReservationVal EvalReserveAND(ReservationVal leftReservation, Func<ReservationVal> evaluateRight ) {
 
         //Case 1: left failed, don't attempt right. No reservations to delete. The empty list in left indicates a failure.
         if (leftReservation.Failed()) 
             return leftReservation;
 
-        //
-        ReservationVal rightReservation = (ReservationVal) EvalExp(rightExp, envV, envH);
+        //Left didnt fail, evaluate right with the passed function from parameter.
+        ReservationVal rightReservation = evaluateRight();
 
         //Case 2: left succeded, right failed.
         if (rightReservation.Failed()) {
 
-            // Delete all reservatiosn in left. 
+            // Delete all reservations in left. 
+            leftReservation.Reservations.Clear();
+
+            //Remove from register
+            
+            //return a reservationVal with an empty list -> indicates failed reservation attempt
+            return leftReservation;
         }
 
         //Case 3: both succeded
         else {
+            //Combine reservations to a composite, in the original
+            leftReservation.Reservations.AddRange(rightReservation.Reservations);
 
-            //Concatenate the reservationList
-        }      
-        return leftReservation;//stub for compiler errors  
+            //return the reservation which is now interpreted as a composite
+            return leftReservation;
+        }
     }
 
-    private static  ReservationVal EvalReserveSEQ(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
+    /// <summary> Two paths lead here: 1. Binary reserve operation, 2. FLEXIBLE reccurrence evaluation from a leaf. </summary>
+    private static  ReservationVal EvalReserveSEQ(ReservationVal leftReservation, Func<ReservationVal> evaluateRight ) {
+        ReservationVal rightReservation = evaluateRight();
+
+        //Combine reservations to a composite, in the original - wether either were empty
+        leftReservation.Reservations.AddRange(rightReservation.Reservations);
+        
         return leftReservation;//stub for compiler errors  
     }
 

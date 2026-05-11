@@ -1,6 +1,4 @@
-using System.ComponentModel;
 using RAL.AST;
-using RAL.Interpreter;
 namespace RAL.TC;
 
 class TypeChecker {

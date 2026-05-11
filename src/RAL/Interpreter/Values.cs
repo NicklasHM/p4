@@ -1,6 +1,5 @@
 namespace RAL.Interpreter;
 
-using System.ComponentModel;
 using System.Globalization;
 
 /* Runtime values used by the interpreter.
@@ -55,8 +54,6 @@ record DurationVal(TimeSpan Value) : Value
 {
     public override string ToString() => Value.ToString();
 }
-
-
 
 //EnvV, EnvF, EnvH
 
