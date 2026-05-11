@@ -1,7 +1,4 @@
-using System.Dynamic;
-using Microsoft.Win32;
 using RAL.AST;
-using RAL.TC;
 
 namespace RAL.Interpreter;
 
@@ -64,7 +61,7 @@ public class Interpreter {
 
             Reference r => EvalReference(r, envV),
             
-            //Reserve reserveNode => EvalReserve(reserveNode.Query,)
+            Reserve reserveNode => EvalReserve(reserveNode.Query),
             // reschedule join
 
             Assignment a => EvalAssignment(a, envV, envH),
@@ -94,7 +91,7 @@ public class Interpreter {
         if (condition.AsBool())
             EvalStmt(ifNode.ThenBody, envV.NewScope(), envH); //will be skip if empty {}
         else 
-            EvalStmt(ifNode.ElseBody, envV.NewScope(), envH); //will be skip if excluded or empty {}
+            EvalStmt(ifNode.ElseBody, envV.NewScope(), envH); //will be skip if empty {} or 'else' ommitted entirely in src code
     }
 
     private static void HandleVarDecl(VarDecl vdNode, EnvV envV) {
@@ -107,8 +104,7 @@ public class Interpreter {
 
     /// <summary> Returns default values of uninitialized variables </summary>
     private static Value GetDefaultValue(TypeT type) => 
-    type switch 
-        {
+    type switch {
             BoolT => new BoolVal(false),
             NumberT => new NumberVal(0),
             StringT => new StringVal(""),
@@ -241,6 +237,29 @@ public class Interpreter {
         //Either case: value of an assignment is the right hand side
         return value;
     }
+
+    private static ReservationVal EvalReserve(QueryData query) {
+
+        /* Resource spec contains a list of objects guarenteed by grammar to be 
+         - a * CategoryId id    (quantity of a category (or subtypes) + local var binding)
+         - a * CategoryId       (quantity of a category(or subtypes)  - no local var binding)
+         - ResourceId           (previously declared resource)
+        */
+        
+
+        /*Timespec
+
+        (DateTimeV, DateTimeV) -> DateTimeVal start,  DateTimeVal end,  
+        (DateTimeV, DateTimeV) -> DateTimeVal start,  DateTimeVal end,  
+        
+        */
+
+        return new ReservationVal(new List<ReservationAtomVal>());
+
+        
+    }
+
+    //(DateTimeVal, DateTimeVal) ComputeTimePeriod(DateTimeV st)
 
     //Right operand Exp rightExp is intentionally not evaluated here. 
     private static ReservationVal EvalBinaryReserve(BinaryOperator op, ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {

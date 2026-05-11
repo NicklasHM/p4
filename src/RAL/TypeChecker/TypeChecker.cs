@@ -324,64 +324,86 @@ class TypeChecker {
         foreach(ResourceSpec resourceSpec in resourceSpecs) { // loop over the [[a rc ident] and [a rc ident] and [a rc ident] and ...]
             
             // "a rc" or "a rc id"
-            if (resourceSpec.Quantity != null && resourceSpec.CategoryId != null) {
-    
-                TypeT quantityType = ExpType(resourceSpec.Quantity, envV, envC, envH, envT, envR, envCPT);
+            switch(resourceSpec) {
+                case ResourceInstanceSpec rs: {
+                    TypeT? type = envV.Lookup(rs.ResourceId);
 
-                if(quantityType is ErrorT) return false;
-
-                if (quantityType is not NumberT) {
-                    errors.Add($"Expected type 'Number' got '{quantityType}.");
-                    isWellTyped = false;
+                    if(type == null) {
+                        errors.Add($"Use of undeclared variable '{rs.ResourceId}'.");
+                        isWellTyped = false;
+                        continue;
+                    }
+                    if (type is not ResourceT) {
+                        errors.Add($"Expected type 'Resource' got '{type}'.");
+                        isWellTyped = false;
+                    }
+                    break;
                 }
 
-                if (!envC.CategoryIsDeclared(resourceSpec.CategoryId)) {
-                    errors.Add($"Use of undeclared category '{resourceSpec.CategoryId}'.");
-                    isWellTyped = false;
+                case CategorySpecWithBinding cb: {
+                    isWellTyped = HandleCategorySpec(cb, envV, envC, envH, envT, envR, envCPT);
+
+                    bool bound = envV.Bind(cb.LocalBindingId, new ResourceT(cb.CategoryId));
+                    if(!bound) errors.Add($"Variable '{cb.LocalBindingId}' already declared in current scope.");
+                    
+                    break; 
                 }
 
-                if (resourceSpec.Identifier != null) {
-                    bool bound = envV.Bind(resourceSpec.Identifier, new ResourceT(resourceSpec.CategoryId));
-                    if(!bound) errors.Add($"Variable '{resourceSpec.Identifier}' already declared in current scope.");
+                case CategorySpec cs: {
+                    isWellTyped = HandleCategorySpec(cs, envV, envC, envH, envT, envR, envCPT);
+                    break;
                 }
+
+                default: throw new Exception("Invalid resource specification.");
             }
-
-            // "id"
-            else if (resourceSpec.Identifier != null && resourceSpec.Quantity == null) {
-                TypeT? type = envV.Lookup(resourceSpec.Identifier);
-
-                if(type == null) {
-                    errors.Add($"Use of undeclared variable '{resourceSpec.Identifier}'.");
-                    isWellTyped = false;
-                    continue;
-                }
-                if (type is not ResourceT) {
-                    errors.Add($"Expected type 'Resource' got '{type}'.");
-                    isWellTyped = false;
-                }
-            }
-
-            else {
-                // invalid combination
-                throw new Exception("Invalid resource specification."); // should never happen
-            }
+            
         }
 
         return isWellTyped;
     }
+
+
+    private bool HandleCategorySpec(CategorySpec cs, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
+
+        bool isWellTyped = true;
+
+        TypeT quantityType = ExpType(cs.Quantity, envV, envC, envH, envT, envR, envCPT);
+
+        if(quantityType is ErrorT) return false;
+
+        if (quantityType is not NumberT) {
+            errors.Add($"Expected type 'Number' got '{quantityType}.");
+            isWellTyped = false;
+        }
+
+        if (!envC.CategoryIsDeclared(cs.CategoryId)) {
+            errors.Add($"Use of undeclared category '{cs.CategoryId}'.");
+            isWellTyped = false;
+        }
+
+        return isWellTyped;
+    }
+
     private bool TimeSpecIsWellTyped(TimeSpec timeSpec, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
-        TypeT fromType = ExpType(timeSpec.Start, envV, envC, envH, envT, envR, envCPT );
+        TypeT fromType = ExpType(timeSpec.Start, envV, envC, envH, envT, envR, envCPT);
         TypeT toType = ExpType(timeSpec.EndMarker, envV, envC, envH, envT, envR, envCPT);
 
         if (fromType is ErrorT || toType is ErrorT)
             return false;
-        
-        return (fromType, toType) switch {
-            (DateTimeT, DateTimeT) => true, // dt to dt
-            (DateTimeT, DurationT) => true, // dt for dur
-            _  => Error($"Types {fromType.ToString()} and {toType.ToString()} incompatible with interval expression.", false)
-        };
+
+        switch(timeSpec) {
+            case TimeSpecTo: 
+                if(fromType is DateTimeT && toType is DateTimeT) return true;
+                return Error($"Expected 'from 'DateTime' to 'DateTime'' got 'from '{fromType.ToString()}' to '{toType.ToString()}''.", false);
+
+            case TimeSpecFor:
+                if(fromType is DateTimeT && toType is DurationT) return true;
+                return Error($"Expected 'from 'DateTime' for 'Duration'' got 'from '{fromType.ToString()}' for '{toType.ToString()}''.", false);
+
+            default: throw new Exception("Invalid time specification.");
+        }
     }
+    
 
     private bool ConditionIsWellTyped(Exp? condition, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         if(condition == null) return true; // cannot be illtyped if not present
@@ -399,17 +421,24 @@ class TypeChecker {
     private bool RecurrenceIsWellTyped(RecurrenceSpec? recurrence, EnvV envV, EnvC envC, EnvH envH, EnvT envT, EnvR envR, EnvCPT envCPT) {
         if(recurrence == null) return true; // cannot be illtyped if not present
 
-        TypeT everyType = ExpType(recurrence.EveryDuration, envV, envC, envH, envT, envR, envCPT);
-        TypeT endType = ExpType(recurrence.EndMarker, envV, envC, envH, envT, envR, envCPT);
+        TypeT everyType = ExpType(recurrence.Time.Every, envV, envC, envH, envT, envR, envCPT);
+        TypeT endType = ExpType(recurrence.Time.EndMarker, envV, envC, envH, envT, envR, envCPT);
 
         if (everyType is ErrorT || endType is ErrorT)
             return false;
+        
 
-        return (everyType, endType) switch {
-            (DurationT, DateTimeT) => true, // needs way to distinguish between for/until
-            (DurationT, DurationT) => true,
-            _  => Error($"Types '{everyType.ToString()}' and '{endType.ToString()}' incompatible for recurrence.", false)       
-        };
+        switch(recurrence.Time) {
+            case RecurrenceFor: 
+                if(everyType is DurationT && endType is DurationT) return true;
+                return Error($"Expected 'every 'Duration' for 'Duration'' got 'every '{everyType.ToString()}' for '{endType.ToString()}''.", false);
+
+            case RecurrenceUntil: 
+                if(everyType is DurationT && endType is DateTimeT) return true;
+                return Error($"Expected 'every 'Duration' until 'DateTime'' got 'every '{everyType.ToString()}' until '{endType.ToString()}''.", false);
+
+             default: throw new Exception("Invalid recurrence specification.");
+        }
     }    
     
     /*________________________END: Query___________________________________________*/
