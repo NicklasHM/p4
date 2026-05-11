@@ -97,16 +97,16 @@ static class TestHelpers
     public static TypeChecker RunTypeChecker(Stmt node)
     {
         var tc = new TypeChecker();
-        tc.StmtType(node, new EnvV(), new EnvC(), new EnvH(), new EnvT(), new EnvR(), new EnvCPT());
+        tc.StmtType(node, new TC.EnvV(), new EnvC(), new TC.EnvH(), new EnvT(), new EnvR(), new EnvCPT());
         return tc;
     }
 
     // ── Interpreter helpers ─────────────────────────────────────────────────
 
     // Evaluate an expression using the real Interpreter and return the result.
-    public static Value EvalExpression(Exp exp)
+    public static Value EvalExpression(Exp exp, Interpreter.EnvV envV, EnvH envH)
     {
-        return Interp.EvalExp(exp);
+        return Interp.EvalExp(exp, envV, envH);
     }
 
     // ── AST inspection helpers ──────────────────────────────────────────────
@@ -123,7 +123,7 @@ static class TestHelpers
     private static Exp? TryFindAssignmentRhs(Stmt? stmt)
     {
         if (stmt is null) return null;
-        if (stmt is ExpStmt { Expression: Assignment a }) return a.Value;
+        if (stmt is ExpStmt { Expression: Assignment a }) return a.Expression;
         if (stmt is Composite c)
             return TryFindAssignmentRhs(c.Stmt1) ?? TryFindAssignmentRhs(c.Stmt2);
         return null;
@@ -145,7 +145,7 @@ static class TestHelpers
         if (stmt is ExpStmt { Expression: Assignment a })
         {
             counter++;
-            if (counter == target) return a.Value;
+            if (counter == target) return a.Expression;
             return null;
         }
         if (stmt is Composite c)

@@ -56,26 +56,57 @@ record DurationVal(TimeSpan Value) : Value
     public override string ToString() => Value.ToString();
 }
 
-/*
+
 
 //EnvV, EnvF, EnvH
 
 //CategoryId for move to avoid linear search of every list in Categories,     property id -> value
-record ResourceVal(string ResourceId, string CategoryId, Dictionary<string , Value> Properties) : Value;
+public record ResourceVal(string ResourceId, string CategoryId, Dictionary<string , Value> Properties) : Value {
 
+    public string CategoryId {get; set;} = CategoryId; // this.CategoryId set to parameter CategoryId
+    public override string ToString() {
+    
+        string r = $"{CategoryId}: {ResourceId} {{ \n";
+
+        foreach (var property in Properties) {
+
+            r += $"  {property.Key}: " + property.Value.ToString() + "\n";
+        }
+
+        r+= "} \n\n";
+
+        return r;
+    } 
+}
+
+
+/*
 //CategoryId -> Resources within it. EnvH is still needed.
 Dictionary<string, List<ResourceVal>> ResourcesByCategory
-
+*/
 
 
 // 2 DoubleRoom dr and 3 Room ... time ...
 //Alternative one resourceVal and make it composite reservation i.e. ReservationVal, drawback cannot reschedule
-record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateTimeVal End );
+record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateTimeVal End ) {
+    public DateTimeVal Start {get; set;} = Start;
+    public DateTimeVal End {get; set;} = End;
+}
 
-//All reservations treated equally like this. An atomic reservation, has a list length 1
-record ReservationVal( List<ReservationAtomVal> Reservations) : Value;
+
+/// <summary>
+/// All reservations are treated equally like this. 
+/// An atomic reservation, has a list length 1
+/// An empty list indicates a "rejected" reservation attempt 
+/// </summary>
+/// <param name="Reservations"></param>
+record ReservationVal( List<ReservationAtomVal> Reservations) : Value {
+
+    public bool Failed() { return this.Reservations.Count == 0; }
+
+}
 
 
-//   
+/*  
 List<ReservationVal> Calendar = new();
 */

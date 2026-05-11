@@ -1,4 +1,7 @@
+using System.Dynamic;
+using Microsoft.Win32;
 using RAL.AST;
+using RAL.TC;
 
 namespace RAL.Interpreter;
 
@@ -22,24 +25,36 @@ public class Interpreter {
 
     //Evaluates a statement with pattern matching on the AST nodes
 
-    public static void EvalStmt(Stmt stmt)
+    public static void EvalStmt(Stmt stmt, EnvV envV, EnvH envH)
     {
         switch(stmt)
         {   case Skip: break;
            
-            case Composite c: HandleComposite(c); break;
+            case Composite c: HandleComposite(c, envV, envH); break;
            
-            case If i: HandleIf(i); break;
+            case If i: HandleIf(i, envV, envH); break;
 
-            case VarDecl vd: HandleVarDecl(vd); break;
+            case VarDecl vd: HandleVarDecl(vd, envV); break;
 
-            case ExpStmt s: Console.WriteLine(EvalExp(s.Expression)); break;
-            default: throw new Exception($"Unknown Statement:" + stmt.ToString());
+            case CategoryDecl cd: ExecCategoryDecl(cd, envH); break;
+            case ResourceDecl rd: ExecResourceDecl(rd, envV, envH); break;
+
+            //case TemplateDecl
+            //case TemplateCall
+
+            case Move m: ExecMove(m, envV); break;
+
+            //case Cancel c: 
+
+            case ExpStmt s: Console.WriteLine(EvalExp(s.Expression, envV, envH)); break;
+
+            // case Availability av
+            default: throw new Exception($"Unknown Statement: " + stmt.ToString());
         }
     }
 
     //Evaluates and returns an expression. Pattern matching on the AST nodes
-    public static Value EvalExp(Exp exp) {
+    public static Value EvalExp(Exp exp, EnvV envV, EnvH envH) {
         return exp switch {
             NumberV n => new NumberVal(n.Value),
             BoolV b => new BoolVal(b.Value),
@@ -47,8 +62,16 @@ public class Interpreter {
             DateTimeV dt => new DateTimeVal(dt.Value),
             DurationV dur => new DurationVal(dur.Value),
 
-            UnaryOperation u => EvalUnary(u),
-            BinaryOperation b => EvalBinary(b),
+            Reference r => EvalReference(r, envV),
+            
+            //Reserve reserveNode => EvalReserve(reserveNode.Query,)
+            // reschedule join
+
+            Assignment a => EvalAssignment(a, envV, envH),
+
+            UnaryOperation u => EvalUnary(u, envV, envH),
+            BinaryOperation b => EvalBinary(b, envV, envH), //  (reserve1, reserve2) defined for or, and, seq. Returns a composite reservation
+
 
             _ => throw new Exception($"Line {exp.LineNumber}: Unsupported expression.")
         };
@@ -56,37 +79,243 @@ public class Interpreter {
 
     /* ________________________Statement Handlers______________________________*/
     
-    static private void HandleComposite (Composite c) {
+    private static void HandleComposite (Composite c, EnvV envV, EnvH envH) {
         // Evaluates left subtree first
-        if(c.Stmt1 != null) EvalStmt(c.Stmt1);
+        if(c.Stmt1 != null) EvalStmt(c.Stmt1, envV, envH);
         // Right subtree
-        if(c.Stmt2 != null) EvalStmt(c.Stmt2);        
+        if(c.Stmt2 != null) EvalStmt(c.Stmt2, envV, envH);        
     }
 
-    static private void HandleIf(If ifNode) {
+    private static void HandleIf(If ifNode, EnvV envV, EnvH envH) {
         //Evaluate condition to interpreter values
-        Value condition = EvalExp(ifNode.Condition);
+        Value condition = EvalExp(ifNode.Condition, envV, envH);
 
         //Downcast and extract bool value, guarenteed by typechecking. Bodies will be skip
         if (condition.AsBool())
-            EvalStmt(ifNode.ThenBody); //will be skip if empty {}
+            EvalStmt(ifNode.ThenBody, envV.NewScope(), envH); //will be skip if empty {}
         else 
-            EvalStmt(ifNode.ElseBody); //will be skip if excluded or empty {}
+            EvalStmt(ifNode.ElseBody, envV.NewScope(), envH); //will be skip if excluded or empty {}
     }
 
-    static private void HandleVarDecl(VarDecl vdNode) {
+    private static void HandleVarDecl(VarDecl vdNode, EnvV envV) {
 
+        //bind identifier to a default value based on type
+        Value value = GetDefaultValue(vdNode.Type);
+
+        envV.Bind(vdNode.Identifier, value);
+    }
+
+    /// <summary> Returns default values of uninitialized variables </summary>
+    private static Value GetDefaultValue(TypeT type) => 
+    type switch 
+        {
+            BoolT => new BoolVal(false),
+            NumberT => new NumberVal(0),
+            StringT => new StringVal(""),
+
+            DateTimeT => new DateTimeVal(DateTime.Now),
+            DurationT => new DurationVal(new TimeSpan(0,0,0,0)),
+
+            //Empty list indicates rejected reservation attempt
+            ReservationT => new ReservationVal(new List<ReservationAtomVal>()),
+
+            _ => throw new Exception("VarDecl node with unsupported type")
+        };
+
+    private static void ExecResourceDecl(ResourceDecl resDecl, EnvV envV, EnvH envH) {
+
+        //resource 'body' {} gets new scope for properties to refer to each other by simple name. { Number x; Number y = x = 2; } 
+        EnvV propertyScope = envV.NewScope();
+        
+        //Due to side-effects of assignments, populate the propertylist from propertyScope.Lookup(id) after loop. Collect only the ids
+        HashSet<string> declaredPropertyIds = new();
+
+        foreach (Stmt stmt in resDecl.PropertyList) {
+
+            switch(stmt) {
+                //Case 1: property declaration without assignment
+                case VarDecl vd: 
                 
+                    Value defaultValue = GetDefaultValue(vd.Type);
+
+                    propertyScope.Bind(vd.Identifier, defaultValue);
+
+                    //For poupulating ResourceVal's propertyList from propertyScope after loop. 
+                    declaredPropertyIds.Add(vd.Identifier);
+
+                    break;
+                
+                //Case 2: property declaration with assignment
+                case Composite { Stmt1: VarDecl varDecl, Stmt2: ExpStmt expStmt}: //Property pattern matching, both must be met
+                    
+                    //Bind lhs property id within scope, such that the reference of the assignment is bound when evaluating right hand side. 
+                    propertyScope.Bind(varDecl.Identifier, GetDefaultValue(varDecl.Type));
+
+                    //Recursively evaluates rhs of the assignment, including compound assignments                    
+                    Value assignmentValue = EvalExp(expStmt.Expression, propertyScope, envH);
+
+                    //Set the actual value of lhs property id
+                    propertyScope.Set(varDecl.Identifier, assignmentValue);
+
+                    //For poupulating ResourceVal's propertyList from propertyScope after loop. 
+                    declaredPropertyIds.Add(varDecl.Identifier);
+                    
+                    break;
+            }   
+        }
+
+        //From the newly bound variables in propertyScope, build the property list, by lookups in said scope of collected ids
+        Dictionary<string, Value> propertyList = declaredPropertyIds.ToDictionary(
+            //Key selector function:        From the elements (ids) of declaredIds HashSet, set it as the key of dictonary entry.
+            id => id, 
+            //Value selector function:      Value of new dictionary entry is set to the returned Value from a lookup in the propertyScope.
+            id => propertyScope.Lookup(id) 
+        );
+
+        ResourceVal resource = new ResourceVal(resDecl.Identifier, resDecl.Type.Category, propertyList);
+
+        //Finally Bind the resource to envV (not propertyScope)
+        envV.Bind(resDecl.Identifier, resource);
+
+        //Add resource to the global registry, indexed by its category
+        ResourceRegistry.Instance().AddResource(resDecl.Type.Category, resource);
+    }
+
+    private static void ExecCategoryDecl(CategoryDecl categoryDecl, EnvH envH) {
+
+        //Add it to the registry, such that resources of this category can be added to it
+        ResourceRegistry.Instance().RegisterCategory(categoryDecl.CategoryId);        
+
+        //Relate it to its immediate super in envH
+        envH.EstablishRelation(categoryDecl.CategoryId, categoryDecl.ParentId);
+    }
+
+    private static void ExecMove(Move moveNode, EnvV envV) {
+
+        ResourceVal resourceToMove = (ResourceVal) envV.Lookup(moveNode.ResourceId);
+
+        //Move to the righ category in the registry
+        ResourceRegistry.Instance().MoveResource(resourceToMove, moveNode.Type.Category); 
+
+        //Update categoryId on the resource for easy, currently innit only. Fix
+        resourceToMove.CategoryId = moveNode.Type.Category;
     }
 
     /*_____________________Expression Handlers_____________________*/
 
-    static private Value EvalBinary(BinaryOperation exp) {
-        Value left = EvalExp(exp.LeftExpression);
+    private static Value EvalReference(Reference r, EnvV envV) {
+        
+        //Id case
+        if (r.PropertyId == null) {
+            return envV.Lookup(r.VariableId);         
+        }
+        //id.id case, must be a resource property per type-checker
+        else {
+            //Downcast justified by typechecker, exception -> type-checker logic issue
+            ResourceVal resource = (ResourceVal) envV.Lookup(r.VariableId);
+            //Again an exception -> logic error in type-checker
+            return resource.Properties[r.PropertyId];
+        }        
+    }
 
-        Value right = EvalExp(exp.RightExpression);
+    private static Value EvalAssignment(Assignment a, EnvV envV, EnvH envH) {
 
-        return exp.Operator switch {
+        //Extracting reference node for readability
+        Reference reference = a.Variable;
+
+        //Evaluate right hand side expression
+        Value value = EvalExp(a.Expression, envV, envH);
+
+        //id case, write directly in envV
+        if (reference.PropertyId == null) {
+            envV.Set(reference.VariableId, value);         
+        }
+        //id.id case, must be a resource per type-checker
+        else {
+            //Downcast justified by typechecker, exception -> type-checker logic issue
+            ResourceVal resource = (ResourceVal) envV.Lookup(reference.VariableId);
+
+            //Like EnvR.Set: set the value of the resource's property
+            resource.Properties[reference.PropertyId] = value;
+        }
+        //Either case: value of an assignment is the right hand side
+        return value;
+    }
+
+    //Right operand Exp rightExp is intentionally not evaluated here. 
+    private static ReservationVal EvalBinaryReserve(BinaryOperator op, ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
+
+        return op switch {
+
+            BinaryOperator.OR => EvalReserveOR(leftReservation, rightExp, envV, envH),
+
+            BinaryOperator.AND => EvalReserveAND(leftReservation, rightExp, envV, envH),
+
+            BinaryOperator.SEQ => EvalReserveSEQ(leftReservation, rightExp, envV, envH),
+
+            _ => throw new Exception("Unexpected operator in reservation binary")
+            
+        };
+        
+    }
+
+    /// <summary> Short cirquit evaluation  </summary>
+    private static ReservationVal EvalReserveOR(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH) {
+        
+        // Only attempt right reserve expression if left failed
+        if (leftReservation.Failed()) 
+            return (ReservationVal) EvalExp(rightExp, envV, envH);
+
+        else //left reserve attempt did not fail, return it without having attempted reserving right
+            return leftReservation; 
+        
+    }
+
+    private static ReservationVal EvalReserveAND(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
+
+        //Case 1: left failed, don't attempt right. No reservations to delete. The empty list in left indicates a failure.
+        if (leftReservation.Failed()) 
+            return leftReservation;
+
+        //
+        ReservationVal rightReservation = (ReservationVal) EvalExp(rightExp, envV, envH);
+
+        //Case 2: left succeded, right failed.
+        if (rightReservation.Failed()) {
+
+            // Delete all reservatiosn in left. 
+        }
+
+        //Case 3: both succeded
+        else {
+
+            //Concatenate the reservationList
+        }      
+        return leftReservation;//stub for compiler errors  
+    }
+
+    private static  ReservationVal EvalReserveSEQ(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
+        return leftReservation;//stub for compiler errors  
+    }
+
+    private static Value EvalBinary(BinaryOperation exp, EnvV envV, EnvH envH) {
+        
+        // Always evaluate left - needed regardless of operator or overload
+        Value left = EvalExp(exp.LeftExpression, envV, envH);
+
+        /*Intercept Reservation typed operations, as righ operand should NOT be evaluated for:
+            "or" - when first goes through
+            "and" - when left operand doesn't go through */
+
+        if (left is ReservationVal leftReservation &&  //Below check not needed per typechecking, exceptions wished for logic errors.
+            exp.Operator is BinaryOperator.AND or BinaryOperator.OR or BinaryOperator.SEQ
+        ) {
+             return EvalBinaryReserve(exp.Operator, leftReservation, exp.RightExpression, envV, envH);            
+        }
+
+        Value right = EvalExp(exp.RightExpression, envV, envH);
+
+        return exp.Operator switch {           
 
             /*________________Arithmetic operations_______________*/
             
@@ -213,14 +442,14 @@ public class Interpreter {
 
             // Reserve and seq
 
-            _ => throw new Exception($"Line {exp.LineNumber}: Invalid binary operation.") // Should never happen
+            _ => throw new Exception($"Line {exp.LineNumber}: Invalid binary operation: {left} {exp.Operator} {right}\n.") // Should never happen
         };
     }
 
-    static private Value EvalUnary(UnaryOperation exp) {
+    private static Value EvalUnary(UnaryOperation exp, EnvV envV, EnvH envH) {
 
         //Evaluate inner expression
-        Value value = EvalExp(exp.Expression);
+        Value value = EvalExp(exp.Expression, envV, envH);
 
         return exp.Operator switch {
             UnaryOperator.NOT when value is BoolVal b

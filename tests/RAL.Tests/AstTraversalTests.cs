@@ -39,7 +39,7 @@ file static class AstVisitor
         return exp switch
         {
             Reserve r    => r.Query.Condition,
-            Assignment a => FindQueryConditionInExp(a.Value),
+            Assignment a => FindQueryConditionInExp(a.Expression),
             _            => null
         };
     }
@@ -194,7 +194,7 @@ public class AstTraversalTests
         Assert.Equal("myRoom", resourceDecl.Identifier);
         var resourceType = Assert.IsType<ResourceT>(resourceDecl.Type);
         Assert.Equal("Room", resourceType.Category);
-        Assert.Null(resourceDecl.PropertyList);  // empty body {}
+        Assert.Empty(resourceDecl.PropertyList);  // empty body {}
     }
 
     [Fact]

@@ -8,7 +8,11 @@ public class EnvC {
     public bool CategoryIsDeclared(string category) {
         return C.Contains(category);
     }
-
+    /// <summary>
+    /// adds a category to the environment allowing it to be used in resource declarations
+    /// </summary>
+    /// <returns> false for duplicate entries. true otherwise
+    /// </returns>
     public bool AddCategory(string category) {
         if(CategoryIsDeclared(category)) 
             return false;
