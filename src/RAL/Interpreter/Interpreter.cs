@@ -61,7 +61,7 @@ public class Interpreter {
 
             Reference r => EvalReference(r, envV),
             
-            Reserve reserveNode => EvalReserve(reserveNode.Query),
+            Reserve reserveNode => EvalReserve(reserveNode, envV, envH),
             // reschedule join
 
             Assignment a => EvalAssignment(a, envV, envH),
@@ -238,28 +238,76 @@ public class Interpreter {
         return value;
     }
 
-    private static ReservationVal EvalReserve(QueryData query) {
+    private static ReservationVal EvalReserve(Reserve reserveNode, EnvV envV, EnvH envH) {
+        (int lineNumber, QueryData query) = reserveNode;
 
-        /* Resource spec contains a list of objects guarenteed by grammar to be 
-         - a * CategoryId id    (quantity of a category (or subtypes) + local var binding)
-         - a * CategoryId       (quantity of a category(or subtypes)  - no local var binding)
-         - ResourceId           (previously declared resource)
+        /* List of ResourceSpec, elements guarenteed by subclassing
+         - a * CategoryId id    (quantity of a category (or subtypes) + local var binding)      (CategorySpecWithBinding)
+         - a * CategoryId       (quantity of a category(or subtypes)  - no local var binding)   (CategorySpec)
+         - ResourceId           (previously declared resource)                                  (ResourceInstanceSpec)
         */
         
 
-        /*Timespec
-
-        (DateTimeV, DateTimeV) -> DateTimeVal start,  DateTimeVal end,  
-        (DateTimeV, DateTimeV) -> DateTimeVal start,  DateTimeVal end,  
+        //Extract timespec 
+        (DateTime start, DateTime end) = ComputeTimePeriod(query.Interval, envV, envH);
         
-        */
 
+
+        if (query.Recurrence != null){
+            (TimeSpan intervalBetween, DateTime recurrenceEnd) = ComputeRecurrencePeriod(query.Recurrence.Time, start, envV, envH);
+            
+            for (DateTime currentStart = start + intervalBetween; currentStart < recurrenceEnd; currentStart += intervalBetween) {
+
+                switch (query.Recurrence.Mode)
+                {
+                case RecurrenceMode.FLEXIBLE: //EvalReserveSEQ, with the queryData without the recurrence, start and end times for this itteration
+                        break;
+
+                    case RecurrenceMode.STRICT: //EvalReserveAND, , with the queryData without the recurrence, start and end times for this itteration
+                        break;
+                    
+                };
+                
+            }
+        }
+
+        //for compiler currently
         return new ReservationVal(new List<ReservationAtomVal>());
-
-        
     }
 
-    //(DateTimeVal, DateTimeVal) ComputeTimePeriod(DateTimeV st)
+    /// <summary> Returns a tupple of start DateTime and end DateTime in unwrapped, c# types </summary>
+    private static (DateTime, DateTime) ComputeTimePeriod(TimeSpec timeSpec, EnvV envV, EnvH envH){
+
+        //Evaluate the expressions within timespec
+        Value startVal = EvalExp(timeSpec.Start, envV, envH);
+        Value endMarkerVal = EvalExp(timeSpec.EndMarker, envV, envH);
+
+        //Return unwrapped c#
+        return (startVal, endMarkerVal) switch {
+            (DateTimeVal start, DateTimeVal to) => (start.Value, to.Value),
+            (DateTimeVal start, DurationVal For) =>(start.Value, start.Value + For.Value),
+            _ => throw new Exception("Invalid time specification.\n") 
+        };
+
+    }
+
+    /// <summary> Returns a tupple of start DateTime and end DateTime in unwrapped, c# types </summary>
+        private static (TimeSpan, DateTime) ComputeRecurrencePeriod(RecurrenceInterval recurrence, DateTime start, EnvV envV, EnvH envH)
+    {
+        
+        Value everyVal = EvalExp(recurrence.Every, envV, envH);
+        Value endMarkerVal = EvalExp(recurrence.EndMarker, envV, envH);
+
+        return (everyVal, endMarkerVal) switch {
+            
+            (DurationVal every, DateTimeVal until) => (every.Value, until.Value),
+
+            (DurationVal every, DurationVal For) => (every.Value, start + For.Value),
+
+         _ => throw new Exception("Invalid recurrence specification.\n") 
+            
+        };
+    }
 
     //Right operand Exp rightExp is intentionally not evaluated here. 
     private static ReservationVal EvalBinaryReserve(BinaryOperator op, ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {

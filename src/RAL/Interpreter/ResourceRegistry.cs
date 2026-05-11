@@ -12,7 +12,7 @@ public class ResourceRegistry {
 
     //Private constructor initializing registry data structure
     private ResourceRegistry() {
-
+                                //categoryId
         _registry = new Dictionary<string, HashSet<ResourceVal>>() { { "Resource", new HashSet<ResourceVal>() } };
         
     }
