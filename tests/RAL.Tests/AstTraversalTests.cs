@@ -344,18 +344,9 @@ public class AstTraversalTests
     // ── DateTime / Duration: AST shape ───────────────────────────────────────
 
     [Fact]
-    public void DateTimeLiteral_ParsesAsDateTimeV()
+    public void DateTimeLiteral_ParsesAsDateTimeVWithCorrectDate()
     {
-        // "DateTime dt = 15/03-2026;" → RHS of assignment must be DateTimeV.
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidDateTimeDeclaration);
-        Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
-        Assert.IsType<DateTimeV>(rhs);
-    }
-
-    [Fact]
-    public void DateTimeContainsCorrectDate()
-    {
-        // The parsed DateTimeV must carry March 15, 2026.
+        // "DateTime dt = 15/03-2026;" → RHS must be DateTimeV carrying March 15, 2026.
         Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidDateTimeDeclaration);
         Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
         var dt = Assert.IsType<DateTimeV>(rhs);
@@ -366,7 +357,7 @@ public class AstTraversalTests
     public void DateTimeLiteralWithTime_ParsesAsDateTimeV()
     {
         // "DateTime dt = 15/03-2026 14:00;" — optional time component must be accepted.
-        Stmt root = TestHelpers.ParseShouldSucceed("DateTime dt = 15/03-2026 14:00;");
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidDateTimeWithTime);
         Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
         var dt = Assert.IsType<DateTimeV>(rhs);
         Assert.Equal(14, dt.Value.Hour);
@@ -374,18 +365,9 @@ public class AstTraversalTests
     }
 
     [Fact]
-    public void DurationLiteral_ParsesAsDurationV()
+    public void DurationLiteral_ParsesAsDurationVWithCorrectTimeSpan()
     {
-        // "Duration dur = 2 days;" → RHS of assignment must be DurationV.
-        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidDurationDeclaration);
-        Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
-        Assert.IsType<DurationV>(rhs);
-    }
-
-    [Fact]
-    public void DurationContainsCorrectTimeSpan()
-    {
-        // "2 days" → DurationV with TimeSpan of exactly 2 days.
+        // "Duration dur = 2 days;" → RHS must be DurationV with TimeSpan of exactly 2 days.
         Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidDurationDeclaration);
         Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
         var dur = Assert.IsType<DurationV>(rhs);

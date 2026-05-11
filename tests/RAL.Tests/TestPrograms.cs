@@ -101,9 +101,17 @@ static class TestPrograms
     public const string ValidDateTimeDeclaration =
         "DateTime dt = 15/03-2026;";
 
+    // "DateTime dt = 15/03-2026 14:00;" — date literal with optional time component.
+    public const string ValidDateTimeWithTime =
+        "DateTime dt = 15/03-2026 14:00;";
+
     // "Duration dur = 2 days;" — simple day-based duration.
     public const string ValidDurationDeclaration =
         "Duration dur = 2 days;";
+
+    // "Duration dur = 1 week 2 days 3 hours 30 minutes;" — all four units combined.
+    public const string ValidDurationCompound =
+        "Duration dur = 1 week 2 days 3 hours 30 minutes;";
 
     // dt + dur → DateTime; all three variables in scope for the third assignment.
     public const string ValidDateTimePlusDuration =
@@ -147,11 +155,11 @@ static class TestPrograms
     public const string ValidMoveResourceToCategory =
         "category Room;\ncategory Suite is a Room;\nRoom myRoom {}\nmove myRoom to Suite;";
 
-    // Semantic error: resource identifier not declared → typechecker throws.
+    // Semantic error: resource identifier not declared. Typechecker must add an error to tc.errors.
     public const string InvalidMoveUnknownResource =
         "category Room;\nmove ghost to Room;";
 
-    // Semantic error: target category not declared → typechecker throws.
+    // Semantic error: target category not declared. Typechecker must add an error to tc.errors.
     public const string InvalidMoveUnknownCategory =
         "category Room;\nRoom myRoom {}\nmove myRoom to Unknown;";
 
@@ -163,6 +171,16 @@ static class TestPrograms
     // "reserve myRoom from 15/03-2026 to 16/03-2026" is a Reserve expression.
     public const string ValidReserveStatement =
         "category Room;\nRoom myRoom {}\nReservation res = reserve myRoom from 15/03-2026 to 16/03-2026;";
+
+    // "reserve myRoom from 15/03-2026 for 2 days" — the "for Duration" form of
+    // the Time non-terminal, instead of the "to DateTime" form.
+    public const string ValidReserveForDuration =
+        "category Room;\nRoom myRoom {}\nReservation res = reserve myRoom from 15/03-2026 for 2 days;";
+
+    // "reserve 2 Room from 15/03-2026 to 16/03-2026" — quantity+category resource
+    // spec ("a*rc" form), no alias and no where clause.
+    public const string ValidReserveQuantityCategory =
+        "category Room;\nRoom myRoom {}\nReservation res = reserve 2 Room from 15/03-2026 to 16/03-2026;";
 
     // Availability check for a single named resource.
     // "check" is the keyword for the Availability statement.
@@ -183,11 +201,11 @@ static class TestPrograms
     public const string InvalidCancelNonReservation =
         "Number n = 5;\ncancel n;";
 
-    // Semantic error: reserve references an undeclared resource → typechecker throws.
+    // Semantic error: reserve references an undeclared resource. Typechecker must add an error to tc.errors.
     public const string InvalidReserveUnknownResource =
         "category Room;\nReservation res = reserve ghost from 15/03-2026 to 16/03-2026;";
 
-    // Semantic error: check references an undeclared resource → typechecker throws.
+    // Semantic error: check references an undeclared resource. Typechecker must add an error to tc.errors.
     public const string InvalidAvailabilityUnknownResource =
         "category Room;\ncheck ghost from 15/03-2026 to 16/03-2026;";
 
@@ -196,7 +214,6 @@ static class TestPrograms
         "category Room;\nRoom myRoom { Number beds = 2; }\nNumber numBeds = myRoom.beds;";
 
     // Semantic error: property access on a field that does not exist in the resource.
-    // Correct behavior: typechecker must report an error / throw for unknown property.
     public const string InvalidResourcePropertyAccess =
         "category Room;\nRoom myRoom {}\nNumber numFloors = myRoom.floors;";
 
@@ -211,19 +228,16 @@ static class TestPrograms
         "Reservation res = reserve 1 Room r from 15/03-2026 to 16/03-2026 where (r.beds == 2);";
 
     // Semantic error: predicate r.beds + 2 has type Number, not Bool.
-    // Intended: typechecker must add error to tc.errors.
     public const string InvalidReserveWhereNonBoolPredicate =
         "category Room;\nRoom room1 { Number beds = 2; }\n" +
         "Reservation res = reserve 1 Room r from 15/03-2026 to 16/03-2026 where (r.beds + 2);";
 
     // Semantic error: 'floors' is not a declared property of Room resources.
-    // Intended: typechecker must add error to tc.errors.
     public const string InvalidReserveWhereUnknownProperty =
         "category Room;\nRoom room1 { Number beds = 2; }\n" +
         "Reservation res = reserve 1 Room r from 15/03-2026 to 16/03-2026 where (r.floors == 2);";
 
     // Semantic error: alias 'x' was never introduced in the resource spec; 'r' was.
-    // Intended: typechecker must add error to tc.errors (currently throws).
     public const string InvalidReserveWhereUnknownAlias =
         "category Room;\nRoom room1 { Number beds = 2; }\n" +
         "Reservation res = reserve 1 Room r from 15/03-2026 to 16/03-2026 where (x.beds == 2);";
@@ -252,7 +266,6 @@ static class TestPrograms
         """;
 
     // Semantic error: 'missingTemplate' was never declared.
-    // Intended behavior: typechecker must add an error to tc.errors, not throw.
     public const string InvalidTemplateCallUnknownTemplate =
         "use missingTemplate(2);";
 
@@ -278,11 +291,11 @@ static class TestPrograms
     public const string InvalidTypeBoolDivision =
         "Number s = true / false;";
 
-    // Both declarations bind the same name in the same scope — throws.
+    // Both declarations bind the same name in the same scope.
     public const string InvalidTypeDuplicateVar =
         "Number x = 5;\nNumber x = 10;";
 
-    // Reference to an undeclared variable — throws.
+    // Reference to an undeclared variable.
     public const string InvalidTypeUndeclaredVar =
         "Number x = undeclared;";
 

@@ -1,16 +1,30 @@
 using RAL.AST;
 using RAL.Interpreter;
+using Interp = RAL.Interpreter.Interpreter;
 
 namespace RAL.Tests;
 
 /*
  * Tests for the Interpreter expression evaluator.
- * All tests construct AST nodes directly — the parser is not involved.
+ * Most tests construct AST nodes directly — the parser is not involved.
  * The Interpreter assumes the TypeChecker has already accepted the program,
  * so only well-typed inputs are used here (except the division-by-zero test).
+ *
+ * Statement-execution tests at the bottom drive the full Parse → TypeCheck →
+ * Interpret pipeline because they exercise side effects on ResourceRegistry /
+ * ReservationRegistry, which only the Interpreter mutates.
+ *
+ * ResourceRegistry and ReservationRegistry are process-wide singletons.
+ * This class implements IDisposable so the registries are cleared before
+ * AND after every test (xUnit creates a fresh instance per [Fact]). That way
+ * pipeline tests can reuse the same RAL source from TestPrograms.cs without
+ * inventing unique category names to dodge cross-test pollution.
  */
-public class InterpreterTests
+public class InterpreterTests : IDisposable
 {
+    public InterpreterTests() => TestHelpers.ResetRegistries();
+    public void Dispose()     => TestHelpers.ResetRegistries();
+
     // ── Literals ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -216,9 +230,11 @@ public class InterpreterTests
     }
 
     [Fact]
-    public void UnsupportedExpression_Reference_ThrowsException()
+    public void Reference_UnboundName_ThrowsException()
     {
-        // Reference nodes are not yet handled by the Interpreter.
+        // Evaluating Reference("x", null) against an empty EnvV must throw —
+        // the lookup has no binding to return. Reference itself IS supported
+        // (see Reference_DeclaredVariable_ReturnsBoundValue); only unbound lookup fails.
         var exp = new Reference(1, "x", null);
         Assert.Throws<Exception>(() => TestHelpers.EvalExpression(exp, new EnvV(), new EnvH()));
     }
@@ -393,5 +409,208 @@ public class InterpreterTests
             BinaryOperator.ADD,
             new DateTimeV(1, new DateTime(2026, 3, 15)));
         Assert.Throws<Exception>(() => TestHelpers.EvalExpression(exp, new EnvV(), new EnvH()));
+    }
+
+    // ── Statement execution (intended behavior) ─────────────────────────────
+    //
+    // These tests drive Interpreter.EvalStmt rather than EvalExp.
+    // Tests 1–7 use direct AST construction; tests 8–13 run the full
+    // parse → typecheck → interpret pipeline because the source programs
+    // declare categories / resources / reservations that the interpreter
+    // mutates via side-effects on EnvV and the global registries.
+    //
+    // Pipeline tests reuse RAL source from TestPrograms.cs. The class-level
+    // ResetRegistries (constructor / Dispose) clears the ResourceRegistry and
+    // ReservationRegistry singletons between tests, so the same canonical
+    // names ("Room", "myRoom", "res") can appear in every test without
+    // cross-test pollution.
+    //
+    // Tests tagged [Trait("status","pending")] describe intended Reserve /
+    // Cancel / Reschedule behavior and FAIL today because those interpreter
+    // paths are stubbed — the failure is the signal that the missing path
+    // needs implementing. Filter them out with:
+    //   dotnet test --filter "status!=pending"
+
+
+    [Fact]  // 1
+    public void VarDecl_Number_BindsZeroDefault()
+    {
+        // "Number x;" must bind x → NumberVal(0) in the current scope.
+        var stmt = new VarDecl(1, new NumberT(), "x");
+        var envV = new EnvV();
+        Interp.EvalStmt(stmt, envV, new EnvH());
+        var value = Assert.IsType<NumberVal>(envV.Lookup("x"));
+        Assert.Equal(0f, value.Value, precision: 4);
+    }
+
+    [Fact]  // 2
+    public void VarDecl_Bool_BindsFalseDefault()
+    {
+        // "Bool b;" must bind b → BoolVal(false).
+        var stmt = new VarDecl(1, new BoolT(), "b");
+        var envV = new EnvV();
+        Interp.EvalStmt(stmt, envV, new EnvH());
+        var value = Assert.IsType<BoolVal>(envV.Lookup("b"));
+        Assert.False(value.Value);
+    }
+
+    [Fact]  // 3
+    public void Composite_ExecutesLeftThenRight()
+    {
+        // Left declares x; right assigns 5 to x.
+        // If the order were reversed, the Assignment would throw because
+        // x would not yet be bound — so a successful x == 5 confirms left-then-right.
+        var stmt = new Composite(1,
+            new VarDecl(1, new NumberT(), "x"),
+            new ExpStmt(1, new Assignment(1,
+                new Reference(1, "x", null),
+                new NumberV(1, 5))));
+        var envV = new EnvV();
+        Interp.EvalStmt(stmt, envV, new EnvH());
+        var value = Assert.IsType<NumberVal>(envV.Lookup("x"));
+        Assert.Equal(5f, value.Value, precision: 4);
+    }
+
+    [Fact]  // 4
+    public void Reference_DeclaredVariable_ReturnsBoundValue()
+    {
+        // Pre-bind x → 7 in envV; evaluating Reference("x", null) must return that value.
+        var envV = new EnvV();
+        envV.Bind("x", new NumberVal(7));
+        var value = Assert.IsType<NumberVal>(
+            TestHelpers.EvalExpression(new Reference(1, "x", null), envV, new EnvH()));
+        Assert.Equal(7f, value.Value, precision: 4);
+    }
+
+    [Fact]  // 5
+    public void Assignment_VariableForm_UpdatesBinding()
+    {
+        // Pre-bind x → 0; evaluate Assignment(x, 9); envV.Lookup("x") must be 9.
+        var envV = new EnvV();
+        envV.Bind("x", new NumberVal(0));
+        TestHelpers.EvalExpression(
+            new Assignment(1, new Reference(1, "x", null), new NumberV(1, 9)),
+            envV, new EnvH());
+        var value = Assert.IsType<NumberVal>(envV.Lookup("x"));
+        Assert.Equal(9f, value.Value, precision: 4);
+    }
+
+    [Fact]  // 6
+    public void If_TrueCondition_ExecutesThenBranch()
+    {
+        // Pre-bind flag → 0; if (true) then { flag = 1; } else { flag = 2; }
+        // After execution flag must be 1.
+        var envV = new EnvV();
+        envV.Bind("flag", new NumberVal(0));
+        var ifStmt = new If(1,
+            new BoolV(1, true),
+            new ExpStmt(1, new Assignment(1, new Reference(1, "flag", null), new NumberV(1, 1))),
+            new ExpStmt(1, new Assignment(1, new Reference(1, "flag", null), new NumberV(1, 2))));
+        Interp.EvalStmt(ifStmt, envV, new EnvH());
+        var value = Assert.IsType<NumberVal>(envV.Lookup("flag"));
+        Assert.Equal(1f, value.Value, precision: 4);
+    }
+
+    [Fact]  // 7
+    public void If_FalseCondition_ExecutesElseBranch()
+    {
+        // Pre-bind flag → 0; if (false) then { flag = 1; } else { flag = 2; }
+        // After execution flag must be 2.
+        var envV = new EnvV();
+        envV.Bind("flag", new NumberVal(0));
+        var ifStmt = new If(1,
+            new BoolV(1, false),
+            new ExpStmt(1, new Assignment(1, new Reference(1, "flag", null), new NumberV(1, 1))),
+            new ExpStmt(1, new Assignment(1, new Reference(1, "flag", null), new NumberV(1, 2))));
+        Interp.EvalStmt(ifStmt, envV, new EnvH());
+        var value = Assert.IsType<NumberVal>(envV.Lookup("flag"));
+        Assert.Equal(2f, value.Value, precision: 4);
+    }
+
+    [Fact]  // 8
+    public void CategoryDecl_RegistersInResourceRegistry()
+    {
+        // After running "category Room;" the registry must contain a Room bucket.
+        // ResourceRegistry.ToString contains the category name in its header per bucket.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidCategory);
+        TestHelpers.RunTypeChecker(root);
+        Interp.EvalStmt(root, new EnvV(), new EnvH());
+        Assert.Contains("Room", ResourceRegistry.Instance().ToString());
+    }
+
+    [Fact]  // 9
+    public void ResourceDecl_CreatesResourceValWithPropertyMap()
+    {
+        // "Room myRoom { Number beds = 2; }" — envV.Lookup("myRoom") must be a
+        // ResourceVal whose Properties["beds"] equals NumberVal(2).
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidResourceWithProperty);
+        TestHelpers.RunTypeChecker(root);
+        var envV = new EnvV();
+        Interp.EvalStmt(root, envV, new EnvH());
+        var resource = Assert.IsType<ResourceVal>(envV.Lookup("myRoom"));
+        Assert.Equal("Room", resource.CategoryId);
+        var beds = Assert.IsType<NumberVal>(resource.Properties["beds"]);
+        Assert.Equal(2f, beds.Value, precision: 4);
+    }
+
+    [Fact]  // 10
+    public void Move_UpdatesRegistryBucketAndResourceCategoryId()
+    {
+        // After "move myRoom to Suite;" the resource's CategoryId must be "Suite"
+        // and the registry must list it under Suite.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidMoveResourceToCategory);
+        TestHelpers.RunTypeChecker(root);
+        var envV = new EnvV();
+        Interp.EvalStmt(root, envV, new EnvH());
+        var resource = Assert.IsType<ResourceVal>(envV.Lookup("myRoom"));
+        Assert.Equal("Suite", resource.CategoryId);
+        Assert.Contains("Suite", ResourceRegistry.Instance().ToString());
+    }
+
+    [Fact, Trait("status", "pending")]  // 11
+    public void Reserve_NamedResourceInValidInterval_ProducesNonFailedReservation()
+    {
+        // Intended behavior: "reserve r from … to …" yields a ReservationVal
+        // whose Failed() is false (i.e. the Reservations list is non-empty).
+        // Today EvalReserve is a stub — Reserve falls through to the default
+        // "Unsupported expression" exception in EvalExp. Test fails informatively.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidReserveStatement);
+        TestHelpers.RunTypeChecker(root);
+        var envV = new EnvV();
+        Interp.EvalStmt(root, envV, new EnvH());
+        var reservation = Assert.IsType<ReservationVal>(envV.Lookup("res"));
+        Assert.False(reservation.Failed());
+    }
+
+    [Fact, Trait("status", "pending")]  // 12
+    public void Cancel_RemovesReservationFromRegistry()
+    {
+        // Intended behavior: after "cancel res;" the reservation must report
+        // Failed() == true (i.e. its Reservations list is empty).
+        // Today Cancel is not matched in EvalStmt's switch — it throws
+        // "Unknown Statement". Test fails informatively.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidCancelReservation);
+        TestHelpers.RunTypeChecker(root);
+        var envV = new EnvV();
+        Interp.EvalStmt(root, envV, new EnvH());
+        var reservation = Assert.IsType<ReservationVal>(envV.Lookup("res"));
+        Assert.True(reservation.Failed());
+    }
+
+    [Fact, Trait("status", "pending")]  // 13
+    public void Reschedule_ReturnsReservationWithNewInterval()
+    {
+        // Intended behavior: "reschedule res from 20/03-2026 to 21/03-2026"
+        // returns a ReservationVal whose atom carries the new start/end.
+        // Today Reschedule has no EvalExp case — falls to "Unsupported expression".
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidRescheduleReservation);
+        TestHelpers.RunTypeChecker(root);
+        var envV = new EnvV();
+        Interp.EvalStmt(root, envV, new EnvH());
+        var reservation = Assert.IsType<ReservationVal>(envV.Lookup("rescheduled"));
+        Assert.False(reservation.Failed());
+        var atom = Assert.Single(reservation.Reservations);
+        Assert.Equal(new DateTime(2026, 3, 20), atom.Start.Value);
+        Assert.Equal(new DateTime(2026, 3, 21), atom.End.Value);
     }
 }

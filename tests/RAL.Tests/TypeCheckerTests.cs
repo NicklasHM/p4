@@ -74,6 +74,18 @@ public class TypeCheckerTests
         TestHelpers.TypeCheckShouldSucceed(TestPrograms.ValidShadowing);
     }
 
+    [Fact]
+    public void TemplateBody_ReadsOuterScopeVariable_IsAccepted()
+    {
+        // A template body must be able to read variables declared in an
+        // enclosing scope. The body initialises a local Number from an outer
+        // Number, so the type system has to resolve "outer" through the
+        // template-body env into the enclosing env.
+        const string src =
+            "Number outer = 5;\ntemplate t() { Number inner = outer; }";
+        TestHelpers.TypeCheckShouldSucceed(src);
+    }
+
     // ── Positive: direct AST construction ────────────────────────────────────
 
     [Fact]
@@ -108,30 +120,22 @@ public class TypeCheckerTests
     [Fact]
     public void StringAssignedToNumber_IsRejected()
     {
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(
-            TestPrograms.InvalidTypeStringAssignedToNumber);
-
-        Assert.Contains(tc.errors,
-            e => e.Contains("number") || e.Contains("string") || e.Contains("Number") || e.Contains("String"));
+        TestHelpers.TypeCheckShouldReportError(
+            TestPrograms.InvalidTypeStringAssignedToNumber, "number", "string");
     }
 
     [Fact]
     public void BoolDivision_IsRejected()
     {
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(
-            TestPrograms.InvalidTypeBoolDivision);
-
-        Assert.Contains(tc.errors, e => e.Contains("bool") || e.Contains("Bool"));
+        TestHelpers.TypeCheckShouldReportError(
+            TestPrograms.InvalidTypeBoolDivision, "bool");
     }
 
     [Fact]
     public void IfStatement_WithNonBoolCondition_IsRejected()
     {
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(
-            TestPrograms.InvalidTypeIfNonBoolCondition);
-
-        Assert.Contains(tc.errors,
-            e => e.Contains("bool") || e.Contains("Bool") || e.Contains("condition"));
+        TestHelpers.TypeCheckShouldReportError(
+            TestPrograms.InvalidTypeIfNonBoolCondition, "bool", "condition");
     }
 
     // ── Negative: direct AST construction ────────────────────────────────────
@@ -143,7 +147,9 @@ public class TypeCheckerTests
         var node = new ExpStmt(1, new UnaryOperation(1, UnaryOperator.NOT, new NumberV(1, 5)));
         TypeChecker tc = TestHelpers.RunTypeChecker(node);
         Assert.NotEmpty(tc.errors);
-        Assert.Contains(tc.errors, e => e.Contains("number") || e.Contains("Number") || e.Contains("bool"));
+        Assert.Contains(tc.errors, e =>
+            e.Contains("number", StringComparison.OrdinalIgnoreCase) ||
+            e.Contains("bool",   StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -184,7 +190,9 @@ public class TypeCheckerTests
         var node = new ExpStmt(1, new UnaryOperation(1, UnaryOperator.NEG, new BoolV(1, true)));
         TypeChecker tc = TestHelpers.RunTypeChecker(node);
         Assert.NotEmpty(tc.errors);
-        Assert.Contains(tc.errors, e => e.Contains("number") || e.Contains("Number") || e.Contains("bool"));
+        Assert.Contains(tc.errors, e =>
+            e.Contains("number", StringComparison.OrdinalIgnoreCase) ||
+            e.Contains("bool",   StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -194,8 +202,7 @@ public class TypeCheckerTests
         //   1. Parse successfully (syntax is valid).
         //   2. Produce UnaryOperation(NOT, NumberV(5)) in the AST.
         //   3. Be rejected by the typechecker because NOT requires Bool.
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(TestPrograms.NotOnNumber);
-        Assert.Contains(tc.errors, e => e.Contains("bool") || e.Contains("Bool") || e.Contains("not"));
+        TestHelpers.TypeCheckShouldReportError(TestPrograms.NotOnNumber, "bool", "not");
     }
 
     // ── Semantic errors: undeclared and duplicate identifiers ─────────────────
@@ -340,36 +347,36 @@ public class TypeCheckerTests
     [Fact]
     public void DateTimePlusDateTime_IsRejected()
     {
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(TestPrograms.InvalidDateTimePlusDateTime);
-        Assert.Contains(tc.errors, e => e.Contains("Datetime") || e.Contains("datetime") || e.Contains("incompatible"));
+        TestHelpers.TypeCheckShouldReportError(
+            TestPrograms.InvalidDateTimePlusDateTime, "datetime");
     }
 
     [Fact]
     public void DateTimeMinusDateTime_IsRejected()
     {
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(TestPrograms.InvalidDateTimeMinusDateTime);
-        Assert.Contains(tc.errors, e => e.Contains("Datetime") || e.Contains("incompatible"));
+        TestHelpers.TypeCheckShouldReportError(
+            TestPrograms.InvalidDateTimeMinusDateTime, "datetime");
     }
 
     [Fact]
     public void DurationPlusDateTime_IsRejected()
     {
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(TestPrograms.InvalidDurationPlusDateTime);
-        Assert.Contains(tc.errors, e => e.Contains("incompatible") || e.Contains("duration") || e.Contains("Duration"));
+        TestHelpers.TypeCheckShouldReportError(
+            TestPrograms.InvalidDurationPlusDateTime, "duration", "datetime");
     }
 
     [Fact]
     public void DateTimeAssignedToNumber_IsRejected()
     {
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(TestPrograms.InvalidDateTimeAssignedToNumber);
-        Assert.Contains(tc.errors, e => e.Contains("number") || e.Contains("Number") || e.Contains("Datetime"));
+        TestHelpers.TypeCheckShouldReportError(
+            TestPrograms.InvalidDateTimeAssignedToNumber, "number", "datetime");
     }
 
     [Fact]
     public void DurationAssignedToDateTime_IsRejected()
     {
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(TestPrograms.InvalidDurationAssignedToDateTime);
-        Assert.Contains(tc.errors, e => e.Contains("duration") || e.Contains("Duration") || e.Contains("Datetime"));
+        TestHelpers.TypeCheckShouldReportError(
+            TestPrograms.InvalidDurationAssignedToDateTime, "duration", "datetime");
     }
 
     [Fact]
@@ -474,17 +481,16 @@ public class TypeCheckerTests
     public void CancelNonReservation_IsRejected()
     {
         // "cancel n;" where n is Number → type error (expected Reservation).
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(TestPrograms.InvalidCancelNonReservation);
-        Assert.Contains(tc.errors,
-            e => e.Contains("Reservation") || e.Contains("reservation") || e.Contains("Number"));
+        TestHelpers.TypeCheckShouldReportError(
+            TestPrograms.InvalidCancelNonReservation, "reservation", "number");
     }
 
     [Fact]
     public void MoveNonResource_IsRejected()
     {
         // "move n to Room;" where n is Number → error added to tc.errors.
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(TestPrograms.InvalidMoveNonResource);
-        Assert.Contains(tc.errors, e => e.Contains("Resource") || e.Contains("resource"));
+        TestHelpers.TypeCheckShouldReportError(
+            TestPrograms.InvalidMoveNonResource, "resource");
     }
 
     [Fact]
@@ -539,10 +545,11 @@ public class TypeCheckerTests
     [Fact]
     public void DuplicateCategory_IsRejected()
     {
-        // Declaring the same category twice → error added to tc.errors.
+        // Declaring the same category twice.
+        // Intended: typechecker must add an error to tc.errors (current impl
+        // throws via EnvH.EstablishRelation on the duplicate Add).
         const string src = "category Room;\ncategory Room;";
-        TypeChecker tc = TestHelpers.TypeCheckShouldFail(src);
-        Assert.Contains(tc.errors, e => e.Contains("Room") || e.Contains("already"));
+        TestHelpers.TypeCheckShouldReportError(src, "Room", "already");
     }
 
     // ── Where-clause semantics ───────────────────────────────────────────────
