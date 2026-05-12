@@ -18,5 +18,33 @@ public class ReservationRegistry
     //Method to access singleton, which is otherwise private
     public static ReservationRegistry Instance() { return instance; }
 
+    /// <summary> Interface for registering a given reservation </summary>
+    public void RegisterReservation(ReservationVal reservation) {
+        _registry.Add(reservation);
+    }
+
+    /// <summary> Interface for cancelling a given reservation </summary>
+    public void CancelReservation(ReservationVal reservation) {
+        _registry.Remove(reservation);        
+    }
+
+    /// <summary> Checks weather a specific resource is available in the given time slot </summary>
+    public bool IsAvailable(ResourceVal resource, DateTime requestedStart, DateTime requestedEnd) {
+        //Negated overlap check
+        return 
+            !(_registry
+                //From each possibly composite Reservation, extract all inner atomic reservations into one flat list<ResourceAtomVal>
+                .SelectMany(resourceVal => resourceVal.Reservations)
+
+                //Foreach resourceAtomVal, which may contain a list of resources for a given timeslot. (re and re)
+                .Any(reservationAtomVal => 
+                    //is the resource reserved?
+                    reservationAtomVal.Resources.Contains(resource) &&
+                    //Overlaps?
+                    requestedStart < reservationAtomVal.End.Value &&
+                    requestedEnd > reservationAtomVal.Start.Value
+                )          
+            );
+    }
 
 }

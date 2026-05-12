@@ -44,13 +44,13 @@ record StringVal(string Value) : Value
 }
 
 /*________________ Time ______________*/
-record DateTimeVal(DateTime Value) : Value
+public record DateTimeVal(DateTime Value) : Value
 {
     // Returns the DateTime formatted as custom "dd/MM-yyyy HH:mm" using French (fr-FR) culture.
     public override string ToString() => Value.ToString("dd/MM-yyyy HH:mm", new CultureInfo("fr-FR"));
 }
 
-record DurationVal(TimeSpan Value) : Value
+public record DurationVal(TimeSpan Value) : Value
 {
     public override string ToString() => Value.ToString();
 }
@@ -85,7 +85,7 @@ Dictionary<string, List<ResourceVal>> ResourcesByCategory
 
 // 2 DoubleRoom dr and 3 Room ... time ...
 //Alternative one resourceVal and make it composite reservation i.e. ReservationVal, drawback cannot reschedule
-record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateTimeVal End ) {
+public record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateTimeVal End ) {
     public DateTimeVal Start {get; set;} = Start;
     public DateTimeVal End {get; set;} = End;
 }
@@ -97,7 +97,7 @@ record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateT
 /// An empty list indicates a "rejected" reservation attempt 
 /// </summary>
 /// <param name="Reservations"></param>
-record ReservationVal( List<ReservationAtomVal> Reservations) : Value {
+public record ReservationVal( List<ReservationAtomVal> Reservations) : Value {
 
     public bool Failed() { return this.Reservations.Count == 0; }
 

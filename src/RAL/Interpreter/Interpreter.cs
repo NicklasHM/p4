@@ -260,17 +260,22 @@ public class Interpreter {
         List<ResolvedQuery> timeSlots = new() { baseQuery };
         (TimeSpan timeBetween, DateTime recurrenceEnd) = ComputeRecurrencePeriod(originalQuery.Recurrence.Time, originalStart, envV, envH);
         
-        //Accumulate each simple reservation request, starting from the second reservation occurrence.
+        //Accumulate each atomic reservation request, starting from the second reservation occurrence.
         for (DateTime slotStart = originalStart + timeBetween; slotStart < recurrenceEnd; slotStart += timeBetween) {
+
             // create identical reservation requests with start and end time shifted by the specified amount (timeBetween: e.g. 'every 7d')
             timeSlots.Add(baseQuery with {Start = slotStart, End = slotStart + duration}); 
         }
 
         //Skip evaluating the first reservation in the recurrence list as it has already been evaluated and stored in 'result'
         foreach (ResolvedQuery slot in timeSlots.Skip(1)) { 
+
             result = originalQuery.Recurrence.Mode switch {
+
                 RecurrenceMode.STRICT => EvalReserveAND(result, () => EvalReserveAtom(slot, envV, envH)),
+
                 RecurrenceMode.FLEXIBLE => EvalReserveSEQ(result, () => EvalReserveAtom(slot, envV, envH)),
+
                 _ => throw new Exception("Unknown recurrence mode.")
             };
         }
