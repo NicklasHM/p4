@@ -248,7 +248,7 @@ public class Interpreter {
         //Treat all queries equally. Wether an AST without recurring or simulated for requrrence         
         ResolvedQuery baseQuery = new ResolvedQuery(originalQuery.ResourceSpecs, originalStart, originalEnd, originalQuery.Condition);
 
-        ReservationVal result = ExecuteSingleReservation(baseQuery, envV, envH); 
+        ReservationVal result = EvalReserveAtom(baseQuery, envV, envH); 
 
         //Case 1: Simple reserve node, no recurring
         if (originalQuery.Recurrence == null) {
@@ -262,21 +262,22 @@ public class Interpreter {
         
         //Accumulate each simple reservation request, starting from the second reservation occurrence.
         for (DateTime slotStart = originalStart + timeBetween; slotStart < recurrenceEnd; slotStart += timeBetween) {
-
+            // create identical reservation requests with start and end time shifted by the specified amount (timeBetween: e.g. 'every 7d')
             timeSlots.Add(baseQuery with {Start = slotStart, End = slotStart + duration}); 
         }
 
-        foreach (ResolvedQuery slot in timeSlots.Skip(1)) {
+        //Skip evaluating the first reservation in the recurrence list as it has already been evaluated and stored in 'result'
+        foreach (ResolvedQuery slot in timeSlots.Skip(1)) { 
             result = originalQuery.Recurrence.Mode switch {
-                RecurrenceMode.STRICT => EvalReserveAND(result, () => ExecuteSingleReservation(slot, envV, envH)),
-                RecurrenceMode.FLEXIBLE => EvalReserveSEQ(result, () => ExecuteSingleReservation(slot, envV, envH)),
-                _ => throw new Exception("Unknown recurrence mode")
+                RecurrenceMode.STRICT => EvalReserveAND(result, () => EvalReserveAtom(slot, envV, envH)),
+                RecurrenceMode.FLEXIBLE => EvalReserveSEQ(result, () => EvalReserveAtom(slot, envV, envH)),
+                _ => throw new Exception("Unknown recurrence mode.")
             };
         }
         return result;
     }
 
-     private static ReservationVal ExecuteSingleReservation(ResolvedQuery query, EnvV envV, EnvH envH) {
+     private static ReservationVal EvalReserveAtom(ResolvedQuery query, EnvV envV, EnvH envH) {
         /*var validCombination = FindAvailableResources(query, envV, envH);
         
         if (validCombination.Any()) {
@@ -298,8 +299,8 @@ public class Interpreter {
         Value endMarkerVal = EvalExp(timeSpec.EndMarker, envV, envH);
 
         //Return unwrapped c#
-        return (startVal, endMarkerVal) switch {   //start dt  ,    end dt   , duration of reservation
-            (DateTimeVal start, DateTimeVal to) => (start.Value, to.Value,  to.Value - start.Value),
+        return (startVal, endMarkerVal) switch {   //start dt,    end dt,  duration of reservation
+            (DateTimeVal start, DateTimeVal to) => (start.Value, to.Value, to.Value - start.Value),
             (DateTimeVal start, DurationVal For) =>(start.Value, start.Value + For.Value, For.Value),
             _ => throw new Exception("Invalid time specification.\n") 
         };
