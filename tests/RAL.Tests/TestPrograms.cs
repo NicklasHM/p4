@@ -302,4 +302,86 @@ static class TestPrograms
     // if-statement with a non-bool condition.
     public const string InvalidTypeIfNonBoolCondition =
         "Number n = 5;\nif (n) then { Bool c = true; }";
+
+    // ── Boolean operator precedence ──────────────────────────────────────────
+    //
+    // The grammar binds AND tighter than OR: LogicalAndExp is nested inside
+    // LogicalOrExp. So "true and false or true" must parse as
+    //   OR(AND(BoolV(true), BoolV(false)), BoolV(true))
+    // — not as AND(BoolV(true), OR(BoolV(false), BoolV(true))).
+    public const string ValidAndOrPrecedence =
+        "Bool result = true and false or true;";
+
+    // ── Reservation combinator programs ──────────────────────────────────────
+    //
+    // The grammar overloads "and"/"or" between Bool operands AND between
+    // Reservation operands; "seq" is reservation-only.
+    // TypeChecker rules (HandleBinary):
+    //   AND/OR: (BoolT, BoolT) | (ReservationT, ReservationT)
+    //   SEQ:    (ReservationT, ReservationT)
+
+    // Two reserves combined with "seq" → composite (best-effort sequenced) reservation.
+    public const string ValidReserveSeqReserve =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation res = reserve myRoom from 15/03-2026 to 16/03-2026 " +
+        "seq reserve myRoom from 17/03-2026 to 18/03-2026;";
+
+    // Two reserves combined with "or" → choice reservation (either may satisfy).
+    public const string ValidReserveOrReserve =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation res = reserve myRoom from 15/03-2026 to 16/03-2026 " +
+        "or reserve myRoom from 17/03-2026 to 18/03-2026;";
+
+    // Two reserves combined with "and" → both-required reservation.
+    public const string ValidReserveAndReserve =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation res = reserve myRoom from 15/03-2026 to 16/03-2026 " +
+        "and reserve myRoom from 17/03-2026 to 18/03-2026;";
+
+    // Type error: SEQ requires (ReservationT, ReservationT); (BoolT, BoolT) must be rejected.
+    public const string InvalidSeqOnBools =
+        "Reservation res = true seq false;";
+
+    // ── Recurring reservation programs ───────────────────────────────────────
+    //
+    // Recurrence grammar (tail of QueryExp):
+    //   "recurring" ("strict" | "flexible") "every" Exp ("until" DateTime | "for" Duration)
+    // TypeChecker.RecurrenceIsWellTyped accepts:
+    //   (DurationT, DateTimeT) → "every D until DT"
+    //   (DurationT, DurationT) → "every D for D"
+    //   anything else → error
+
+    // "every 1 week until 30/06-2026" — strict mode, until-DateTime form.
+    public const string ValidRecurringStrictUntil =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation res = reserve myRoom from 15/03-2026 to 16/03-2026 " +
+        "recurring strict every 1 week until 30/06-2026;";
+
+    // "every 1 week for 4 weeks" — flexible mode, for-Duration form.
+    public const string ValidRecurringFlexibleFor =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation res = reserve myRoom from 15/03-2026 to 16/03-2026 " +
+        "recurring flexible every 1 week for 4 weeks;";
+
+    // Type error: "every 5" — 5 has type Number, recurrence requires Duration.
+    public const string InvalidRecurringNumberInterval =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation res = reserve myRoom from 15/03-2026 to 16/03-2026 " +
+        "recurring strict every 5 until 30/06-2026;";
+
+    // ── Malformed reserve/check syntax ───────────────────────────────────────
+    //
+    // Domain-specific grammar errors — distinct from the generic
+    // "missing semicolon / unclosed paren" cases above.
+
+    // "reserve myRoom 15/03-2026 …" — the required "from" keyword is missing
+    // before the start-date expression.
+    public const string InvalidSyntaxReserveMissingFrom =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation res = reserve myRoom 15/03-2026 to 16/03-2026;";
+
+    // "check myRoom from 15/03-2026" — Time non-terminal needs either
+    // "to DateTime" or "for Duration" after the start; neither is present.
+    public const string InvalidSyntaxCheckMissingToOrFor =
+        "category Room;\nRoom myRoom {}\ncheck myRoom from 15/03-2026;";
 }

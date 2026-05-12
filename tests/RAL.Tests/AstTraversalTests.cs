@@ -3,20 +3,32 @@ using RAL.AST;
 namespace RAL.Tests;
 
 /*
- * Test-only AST traversal utility.
+ * AST-shape tests for the parser's output.
  *
- * Only helpers that navigate to deeply nested nodes are retained here.
- * CountNodes, FindAnyReferenceWithPropertyId, and FindResourceDeclWithProperties
- * were removed: they returned counts/booleans and discarded the actual node
- * content, making assertions vague. Tests now navigate the Composite tree
- * directly and assert on specific node fields.
+ * Tests assert on specific fields of named AST nodes (operators, identifiers,
+ * sub-expression types) rather than on counts or boolean predicates, so a
+ * failure points at the exact node that drifted.
+ *
+ * AstVisitor below provides traversal helpers for nodes that sit deep inside
+ * the Composite tree (Reserve nested in Assignment in ExpStmt, If/Cancel/
+ * TemplateCall whose position depends on the parser's Composite folding).
+ * Tests reach top-level or shallow nodes directly via Composite navigation.
  */
 file static class AstVisitor
 {
     // Returns the where-clause Condition expression from the first Reserve or
     // Availability query in the tree, or null if absent.
-    // Needed because Reserve is nested inside Assignment.Value inside ExpStmt
-    // — direct navigation without a helper would require four Composite steps.
+    //
+    // A Reserve sits deep in the expression tree, not the statement tree.
+    // For a program ending in
+    //   "Reservation res = reserve 1 Room r ... where (r.beds == 2);"
+    // the path from the root looks like:
+    //   Composite → Composite → Composite → ExpStmt
+    //                                       └─ Assignment.Expression
+    //                                          └─ Reserve.Query.Condition
+    // Direct navigation would need six casts and would shift whenever the
+    // surrounding program gains or loses a leading statement. This helper
+    // recurses by node type, so its result is position-independent.
     public static Exp? FindFirstQueryCondition(Stmt root)
         => SearchForQueryCondition(root);
 
@@ -429,5 +441,90 @@ public class AstTraversalTests
         Assert.Equal(2, tc.ArgList!.Count);
         Assert.IsType<NumberV>(tc.ArgList[0]);
         Assert.IsType<StringV>(tc.ArgList[1]);
+    }
+
+    // ── Boolean operator precedence: AND binds tighter than OR ───────────────
+
+    [Fact]
+    public void AndOr_Precedence_AndIsAboveOr()
+    {
+        // "Bool result = true and false or true;" must produce:
+        //   BinaryOperation(OR,
+        //     BinaryOperation(AND, BoolV(true), BoolV(false)),
+        //     BoolV(true))
+        // OR is the outer node because it has lower binding power than AND.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidAndOrPrecedence);
+        Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
+
+        var or = Assert.IsType<BinaryOperation>(rhs);
+        Assert.Equal(BinaryOperator.OR, or.Operator);
+
+        var and = Assert.IsType<BinaryOperation>(or.LeftExpression);
+        Assert.Equal(BinaryOperator.AND, and.Operator);
+        Assert.IsType<BoolV>(and.LeftExpression);
+        Assert.IsType<BoolV>(and.RightExpression);
+
+        Assert.IsType<BoolV>(or.RightExpression);
+    }
+
+    // ── Reservation combinators: AST shape ───────────────────────────────────
+    //
+    // These pin the parser output that the TypeCheckerTests for SEQ/AND/OR
+    // reservation combinators rely on. Without these tests, a parser regression
+    // could hide behind a typechecker that still happens to accept the source.
+
+    [Fact]
+    public void ReserveSeqReserve_IsBinarySeqOfTwoReserves()
+    {
+        // "reserve myRoom from … to … seq reserve myRoom from … to …" must
+        // produce BinaryOperation(SEQ, Reserve, Reserve) as the assignment RHS.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidReserveSeqReserve);
+        Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
+
+        var seq = Assert.IsType<BinaryOperation>(rhs);
+        Assert.Equal(BinaryOperator.SEQ, seq.Operator);
+        Assert.IsType<Reserve>(seq.LeftExpression);
+        Assert.IsType<Reserve>(seq.RightExpression);
+    }
+
+    [Fact]
+    public void ReserveAndReserve_IsBinaryAndOfTwoReserves()
+    {
+        // "reserve … and reserve …" must produce BinaryOperation(AND, Reserve, Reserve).
+        // Distinguishes the reservation-combinator AND from the boolean AND, since
+        // the grammar reuses the same keyword and BinaryOperator.AND for both.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidReserveAndReserve);
+        Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
+
+        var and = Assert.IsType<BinaryOperation>(rhs);
+        Assert.Equal(BinaryOperator.AND, and.Operator);
+        Assert.IsType<Reserve>(and.LeftExpression);
+        Assert.IsType<Reserve>(and.RightExpression);
+    }
+
+    // ── Recurring reservation: AST shape ─────────────────────────────────────
+
+    [Fact]
+    public void RecurringStrictUntil_PopulatesRecurrenceSpec()
+    {
+        // "reserve … recurring strict every 1 week until 30/06-2026" must populate
+        //   Reserve.Query.Recurrence = RecurrenceSpec(
+        //     Mode = STRICT,
+        //     EveryDuration = DurationV(7 days),
+        //     EndMarker = DateTimeV(30/06/2026))
+        // Pins the parser output that RecurrenceIsWellTyped walks.
+        Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidRecurringStrictUntil);
+        Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
+
+        var reserve = Assert.IsType<Reserve>(rhs);
+        Assert.NotNull(reserve.Query.Recurrence);
+        var recurrence = reserve.Query.Recurrence!;
+        Assert.Equal(RecurrenceMode.STRICT, recurrence.Mode);
+
+        var every = Assert.IsType<DurationV>(recurrence.EveryDuration);
+        Assert.Equal(TimeSpan.FromDays(7), every.Value);
+
+        var endDate = Assert.IsType<DateTimeV>(recurrence.EndMarker);
+        Assert.Equal(new DateTime(2026, 6, 30), endDate.Value.Date);
     }
 }

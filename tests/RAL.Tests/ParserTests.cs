@@ -97,4 +97,24 @@ public class ParserTests
         // Optional "where (Exp)" predicate on a "1 Room r" spec.
         TestHelpers.ParseShouldSucceed(TestPrograms.ValidReserveWherePredicate);
     }
+
+    // ── Malformed domain-specific syntax ─────────────────────────────────────
+
+    [Fact]
+    public void ReserveMissingFrom_IsRejectedByParser()
+    {
+        // "reserve myRoom 15/03-2026 to 16/03-2026" — Time non-terminal requires
+        // the "from" keyword before the start expression. Without it the parser
+        // tries to read another identifier where a dateLit appears, and errors.
+        TestHelpers.ParseShouldFail(TestPrograms.InvalidSyntaxReserveMissingFrom);
+    }
+
+    [Fact]
+    public void CheckMissingToOrFor_IsRejectedByParser()
+    {
+        // "check myRoom from 15/03-2026;" — after the start DateTime the
+        // Time non-terminal requires either "to DateTime" or "for Duration".
+        // Hitting ";" instead must produce a parse error.
+        TestHelpers.ParseShouldFail(TestPrograms.InvalidSyntaxCheckMissingToOrFor);
+    }
 }

@@ -215,7 +215,10 @@ public class TypeCheckerTests
     {
         // Binding the same identifier twice in the same scope must add an error
         // to tc.errors. Intended behavior: errors.Add, not a thrown exception.
-        TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidTypeDuplicateVar);
+        // Keyword "already declared" pins the duplicate-binding rule specifically;
+        // a stray error from a different rule wouldn't include that phrase.
+        TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidTypeDuplicateVar,
+            "already declared");
     }
 
     [Fact]
@@ -223,7 +226,10 @@ public class TypeCheckerTests
     {
         // Looking up an identifier that was never declared must add an error
         // to tc.errors. Intended behavior: errors.Add, not a thrown exception.
-        TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidTypeUndeclaredVar);
+        // Keyword "undeclared variable" distinguishes this from "undeclared
+        // category" / "undeclared template" — different rules, same source style.
+        TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidTypeUndeclaredVar,
+            "undeclared variable");
     }
 
     // ── Positive: DateTime / Duration — source programs ──────────────────────
@@ -498,7 +504,10 @@ public class TypeCheckerTests
     {
         // Moving an undeclared resource must add an error to tc.errors.
         // Intended behavior: errors.Add, not a thrown exception.
-        TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidMoveUnknownResource);
+        // Keyword "ghost" is the offending identifier in the test source — its
+        // presence in the error proves the message points at the right node.
+        TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidMoveUnknownResource,
+            "ghost");
     }
 
     [Fact]
@@ -530,7 +539,10 @@ public class TypeCheckerTests
     {
         // Accessing a field that does not exist on a declared resource must add an
         // error to tc.errors. Intended behavior: errors.Add, not a thrown exception.
-        TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidResourcePropertyAccess);
+        // Keyword "floors" is the offending property name in the test source — its
+        // presence in the error proves the message points at the right node.
+        TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidResourcePropertyAccess,
+            "floors");
     }
 
     [Fact]
@@ -621,5 +633,74 @@ public class TypeCheckerTests
         // If the current implementation throws, this test will FAIL —
         // that failure is the signal that envT.Lookup must be fixed.
         TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidTemplateCallUnknownTemplate);
+    }
+
+    // ── Reservation combinator semantics (seq / and / or on reservations) ───
+    //
+    // HandleBinary rules:
+    //   AND/OR: (BoolT, BoolT) | (ReservationT, ReservationT) → operand type
+    //   SEQ:    (ReservationT, ReservationT) only
+    // Any other operand pairing must add an error to tc.errors.
+
+    [Fact]
+    public void ReserveSeqReserve_IsAccepted()
+    {
+        // "reserve … seq reserve …" → BinaryOperation(SEQ, Reserve, Reserve).
+        // SEQ on two ReservationT operands must yield ReservationT with no errors.
+        TestHelpers.TypeCheckShouldSucceed(TestPrograms.ValidReserveSeqReserve);
+    }
+
+    [Fact]
+    public void ReserveOrReserve_IsAccepted()
+    {
+        // "reserve … or reserve …" — OR overloaded for Reservation operands.
+        TestHelpers.TypeCheckShouldSucceed(TestPrograms.ValidReserveOrReserve);
+    }
+
+    [Fact]
+    public void ReserveAndReserve_IsAccepted()
+    {
+        // "reserve … and reserve …" — AND overloaded for Reservation operands.
+        TestHelpers.TypeCheckShouldSucceed(TestPrograms.ValidReserveAndReserve);
+    }
+
+    [Fact]
+    public void SeqOnBools_IsRejected()
+    {
+        // "true seq false" — SEQ has no Bool overload, only (Reservation, Reservation).
+        // The typechecker must add an error to tc.errors mentioning the operator
+        // or operand types.
+        TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidSeqOnBools, "seq", "bool");
+    }
+
+    // ── Recurring reservation semantics ──────────────────────────────────────
+    //
+    // RecurrenceIsWellTyped accepts:
+    //   (DurationT, DateTimeT) for "every D until DT"
+    //   (DurationT, DurationT) for "every D for D"
+    // Anything else must add an error to tc.errors.
+
+    [Fact]
+    public void RecurringStrictUntilDateTime_IsAccepted()
+    {
+        // "recurring strict every 1 week until 30/06-2026" — (DurationT, DateTimeT).
+        TestHelpers.TypeCheckShouldSucceed(TestPrograms.ValidRecurringStrictUntil);
+    }
+
+    [Fact]
+    public void RecurringFlexibleForDuration_IsAccepted()
+    {
+        // "recurring flexible every 1 week for 4 weeks" — (DurationT, DurationT).
+        TestHelpers.TypeCheckShouldSucceed(TestPrograms.ValidRecurringFlexibleFor);
+    }
+
+    [Fact]
+    public void RecurringEveryNumber_IsRejected()
+    {
+        // "recurring strict every 5 until 30/06-2026" — 5 has type Number, not
+        // Duration. RecurrenceIsWellTyped must reject the pairing and add an
+        // error mentioning the recurrence or the offending number type.
+        TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidRecurringNumberInterval,
+            "recurrence", "number");
     }
 }
