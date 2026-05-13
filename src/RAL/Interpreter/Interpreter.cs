@@ -1,5 +1,3 @@
-using System.Reflection;
-using System.Runtime.InteropServices;
 using RAL.AST;
 namespace RAL.Interpreter;
 
@@ -9,8 +7,7 @@ public class Interpreter {
     private static readonly ReservationRegistry reservationRegistry = ReservationRegistry.Instance();
     private static readonly ResourceRegistry resourceRegistry = ResourceRegistry.Instance();
 
-    //Evaluates a statement with pattern matching on the AST nodes
-
+    //Executes a statement with pattern matching on the AST nodes
     public static void ExecStmt(Stmt stmt, EnvV envV, EnvH envH, EnvTem envTem)
     {
         switch(stmt)
@@ -34,7 +31,7 @@ public class Interpreter {
 
             case ExpStmt s: Console.WriteLine(EvalExp(s.Expression, envV, envH)); break;
 
-            // case Availability av
+            case Availability av: HandleAvailability(av, envV, envH); break;
             default: throw new Exception($"Unknown Statement: " + stmt.ToString());
         }
     }
@@ -50,13 +47,15 @@ public class Interpreter {
 
             Reference r => EvalReference(r, envV),
             
+            Assignment a => EvalAssignment(a, envV, envH),
+            
             Reserve reserveNode => EvalReserve(reserveNode, envV, envH),
+            
             Reschedule rescheduleNode => HandleReschedule(rescheduleNode, envV, envH),
 
-            Assignment a => EvalAssignment(a, envV, envH),
-
-            UnaryOperation u => EvalUnary(u, envV, envH),
             BinaryOperation b => EvalBinary(b, envV, envH), //  (reserve1, reserve2) defined for or, and, seq. Returns a composite reservation
+            
+            UnaryOperation u => EvalUnary(u, envV, envH),
 
 
             _ => throw new Exception($"Line {exp.LineNumber}: Unsupported expression.")
@@ -229,6 +228,22 @@ public class Interpreter {
         reservationRegistry.CancelReservation(reservation);
     }
 
+     private static void HandleAvailability(Availability av, EnvV envV, EnvH envH) {
+        (DateTime originalStart, DateTime originalEnd, TimeSpan duration) = ComputeTime(av.Query.Interval, envV, envH);
+        ResolvedQuery baseQuery = new ResolvedQuery(av.Query.ResourceSpecs, originalStart, originalEnd, av.Query.Condition);
+        
+        var validCombinations = QueryEvaluator.EvaluateQuery(baseQuery, envV, envH);
+        
+        if (validCombinations.Any()) {
+            Console.WriteLine($"Availability check succeeded for period {originalStart} to {originalEnd}. Valid combinations found:");
+            foreach(var combo in validCombinations) {
+                Console.WriteLine("  [" + string.Join(", ", combo.Select(r => r.ResourceId)) + "]");
+            }
+        } else {
+            Console.WriteLine("Availability check failed: No resources satisfy the query.");
+        }
+    }
+
     /*_____________________Expression Handlers_____________________*/
 
     private static Value EvalReference(Reference r, EnvV envV) {
@@ -321,13 +336,13 @@ public class Interpreter {
      private static ReservationVal EvalReserveAtom(ResolvedQuery query, EnvV envV, EnvH envH) {
         var validCombinations = QueryEvaluator.EvaluateQuery(query, envV, envH);
 
-         if (validCombinations.Any()) {
-        var selectedCombination = validCombinations.First();
-        var atom = new ReservationAtomVal(selectedCombination, new DateTimeVal(query.Start), new DateTimeVal(query.End));
-        var newReservation = new ReservationVal(new List<ReservationAtomVal> { atom });
+        if (validCombinations.Any()) {
+            var selectedCombination = validCombinations.First();
+            var atom = new ReservationAtomVal(selectedCombination, new DateTimeVal(query.Start), new DateTimeVal(query.End));
+            var newReservation = new ReservationVal(new List<ReservationAtomVal> { atom });
 
-        reservationRegistry.RegisterReservation(newReservation);
-        return newReservation;
+            reservationRegistry.RegisterReservation(newReservation);
+            return newReservation;
         }
 
         return new ReservationVal(new List<ReservationAtomVal>()); // Failed
@@ -412,6 +427,7 @@ public class Interpreter {
             leftReservation.Reservations.Clear();
 
             //Remove from register
+            reservationRegistry.CancelReservation(leftReservation);
             
             //return a reservationVal with an empty list -> indicates failed reservation attempt
             return leftReservation;
@@ -421,7 +437,7 @@ public class Interpreter {
         else {
             //Combine reservations to a composite, in the original
             leftReservation.Reservations.AddRange(rightReservation.Reservations);
-            ReservationRegistry.Instance().CancelReservation(rightReservation);
+            reservationRegistry.CancelReservation(rightReservation);
             //return the reservation which is now interpreted as a composite
             return leftReservation;
         }
@@ -433,7 +449,7 @@ public class Interpreter {
 
         //Combine reservations to a composite, in the original - wether either were empty
         leftReservation.Reservations.AddRange(rightReservation.Reservations);
-        ReservationRegistry.Instance().CancelReservation(rightReservation);
+        reservationRegistry.CancelReservation(rightReservation);
         return leftReservation;//stub for compiler errors  
     }
 
