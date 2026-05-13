@@ -493,7 +493,7 @@ class TypeChecker {
     private TypeT LookupCategoryPropertyType(ResourceT category, string propertyId, EnvH envH, EnvCPT envCPT) {
         
         //Check all categories in subtree
-       foreach (ResourceT related in envH.GetSubtree(category)) {
+       foreach (ResourceT related in envH.GetSubTree(category)) {
             
             if (envCPT.HasProperty(related.Category, propertyId)) 
                 return envCPT.Lookup(related.Category, propertyId);

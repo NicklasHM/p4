@@ -25,7 +25,10 @@ public class ReservationRegistry
 
     /// <summary> Interface for cancelling a given reservation </summary>
     public void CancelReservation(ReservationVal reservation) {
-        _registry.Remove(reservation);        
+        _registry.Remove(reservation);
+
+        //Make a variable's value indicate 'null' reservation
+        reservation.Reservations.Clear();        
     }
 
     /// <summary> Checks weather a specific resource is available in the given time slot </summary>
@@ -45,6 +48,16 @@ public class ReservationRegistry
                     requestedEnd > reservationAtomVal.Start.Value
                 )          
             );
+    }
+    public override string ToString() {
+        if (_registry.Count == 0)
+            return "=== Reservation Registry ===\n(empty)\n";
+
+        string reservations = string.Join(
+            "\n--------------------------------------------------\n",
+            _registry.Select((reservationVal, i) => $"Reservation #{i + 1}\n{reservationVal}"));
+
+        return $"=== Reservation Registry ===\n\n{reservations}\n\n=== End Registry ===";
     }
 
 }

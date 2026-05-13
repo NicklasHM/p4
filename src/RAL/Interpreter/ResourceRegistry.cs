@@ -32,6 +32,10 @@ public class ResourceRegistry {
         GetResourceList(categoryId).Add(resource);
     }
 
+    public IEnumerable<ResourceVal> GetAllResourcesInCategorySubtree(IEnumerable<string> subCategories)
+        => subCategories.SelectMany(category => GetResourceList(category));
+
+
     private HashSet<ResourceVal> GetResourceList(string categoryId) {
         
         //All registered categories must have a list to return, wether empty or not. Exception wanted
@@ -45,9 +49,9 @@ public class ResourceRegistry {
         _registry.Add(categoryId, new HashSet<ResourceVal>());
     }
 
-    public override string ToString() {
+     public override string ToString() {
 
-        string s = "____________Printing Registry:____________\n\n";
+        string s = "____________Printing Resource Registry:____________\n\n";
 
         foreach (var category in _registry) {
             s += $"__In {category.Key} category:__\n\n";
@@ -56,7 +60,7 @@ public class ResourceRegistry {
                 s += resource.ToString();
             }
 
-            s += $"__End of {category.Key} category__\n\n";;
+            s += $"\n__End of {category.Key} category__\n\n";;
         }
 
         s+= "____________Registry Printing Done____________";

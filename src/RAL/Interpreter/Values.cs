@@ -61,19 +61,15 @@ public record DurationVal(TimeSpan Value) : Value
 public record ResourceVal(string ResourceId, string CategoryId, Dictionary<string , Value> Properties) : Value {
 
     public string CategoryId {get; set;} = CategoryId; // this.CategoryId set to parameter CategoryId
-    public override string ToString() {
     
-        string r = $"{CategoryId}: {ResourceId} {{ \n";
+    public override string ToString() {
+        
+        string props = string.Join(
+            ", " , 
+            Properties.Select(p => $"{p.Key}: {p.Value}") );
 
-        foreach (var property in Properties) {
-
-            r += $"  {property.Key}: " + property.Value.ToString() + "\n";
-        }
-
-        r+= "} \n\n";
-
-        return r;
-    } 
+        return $"{CategoryId}({ResourceId}) [{props}]";
+    }
 }
 
 
@@ -88,6 +84,12 @@ Dictionary<string, List<ResourceVal>> ResourcesByCategory
 public record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start, DateTimeVal End ) {
     public DateTimeVal Start {get; set;} = Start;
     public DateTimeVal End {get; set;} = End;
+
+    public override string ToString() {
+        string resources = string.Join("\n    - ", Resources.Select(r => r.ToString()));
+
+        return $"Time: {Start} -> {End}\n  Resources: - {resources}";
+    }
 }
 
 
@@ -100,6 +102,18 @@ public record ReservationAtomVal( List<ResourceVal> Resources, DateTimeVal Start
 public record ReservationVal( List<ReservationAtomVal> Reservations) : Value {
 
     public bool Failed() { return this.Reservations.Count == 0; }
+
+    public bool IsComposite() { return this.Reservations.Count > 1; }
+
+    public override string ToString() {
+        if (Failed())
+            return "FAILED RESERVATION";
+
+        return string.Join(
+            "\n\n",
+            Reservations.Select((reservationAtom, i) => $"Reservation Atom #{i + 1}\n{reservationAtom}")
+        );
+    }
 
 }
 
