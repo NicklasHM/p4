@@ -1,72 +1,94 @@
 using RAL.AST;
 namespace RAL.Interpreter;
 
+using Candidate = List<ResourceVal>;
+using CandidateSet =  List<List<ResourceVal>>;          //List<Candidate>;
+using AllCandidateSets = List<List<List<ResourceVal>>>; //List<CandidateSet>;
+
+/*
+
+reserve:                 _room205    and    2 Room          and                ...      time    condition
+
+spec:                    _room205           2 Room                             ...
+
+candidate:              [_room205]         [r2, r4 ]                           ...
+
+candidateSet:         [ [_room205] ]     [ [r2, r4], [r2, r3], [r3, r4] ]      ...
+
+all_CandidateSets  [  [ [_room205] ]  ,  [ [r2, r4], [r2, r3], [r3, r4] ]  ,   ...  ]
+*/
+
 internal static class QueryEvaluator {
     /// <summary> Evaluates an atomic query an returns a list of all valid combinations of resources.  
     /// Atomic, since recurrence has been pulled out. 
     /// (Availability, Reservation) </summary>
     internal static IEnumerable<List<ResourceVal>> EvaluateQuery(ResolvedQuery query, EnvV envV, EnvH envH) {
 
-        // Step 1: List of all candidate combinations for all resource specification. 
-        List<ResolvedSpec>? groupedCandidateCombinations = ResolveAllResourceSpecs(query, envV, envH);
+        // Step 1: List of all candidates for all resource specifications. 
+        List<ResolvedSpec>? all_CandidateSets = ResolveAllResourceSpecs(query, envV, envH);
         
-        if (groupedCandidateCombinations == null)
-            return [];
+        //Indicates failure from resource availability at requested time
+        if (all_CandidateSets == null)
+            return [[]];
 
-        // Step 2: Cartesian product of all resource specs' combinations, unwraps resolvedspec
-        var cartesianProduct = CartesianProduct(groupedCandidateCombinations.Select(resolvedSpec => resolvedSpec.CandidateCombinations));
+        //Pick one candidate from each spec's candidateSet; discard tuples with overlapping resources between elements of the tuple
+        IEnumerable<List<List<ResourceVal>>> all_crossSpecCandidateTuples = BuildDistinctCandidates(all_CandidateSets);
 
-        // Step 3: Ensure resources across specs are distinct
-        var validAssignments = cartesianProduct.Where(assignment => {
-            var flat = assignment.SelectMany(r => r).ToList();
-            return flat.Distinct().Count() == flat.Count;
+       // Filter by the query condition, if present
+        IEnumerable<List<List<ResourceVal>>> validCrossSpecCandidateTuples = query.Condition == null
+            ? all_crossSpecCandidateTuples
+            : all_crossSpecCandidateTuples.Where(t => CandidateSatisfiesCondition(t, all_CandidateSets, query.Condition, envV, envH));
+
+         // Grouping by spec no longer needed for id binding — flatten permanently into the output format
+        return validCrossSpecCandidateTuples.Select(
+            crossSpecCandidateTuple => crossSpecCandidateTuple.SelectMany(candidate => candidate).ToList()
+        );
+
+        
+        // Step 4: Evaluate Condition
+        all_distinctCandidateTuples = all_distinctCandidateTuples.Where(assignment => {
+            var bindingSets = new List<KeyValuePair<string, List<ResourceVal>>>();
+            for (int i = 0; i < assignment.Count; i++) {
+                if (all_CandidateSets[i].LocalBinding != null) {
+                bindingSets.Add(new KeyValuePair<string, List<ResourceVal>>(
+                    all_CandidateSets[i].LocalBinding!,
+                    assignment[i]));
+                }
+            }
+
+            if (!bindingSets.Any()) {
+                // No bound variables; evaluate once
+                try {
+                    return Interpreter.EvalExp(query.Condition, envV, envH).AsBool();
+                } catch (Interpreter.MissingPropertyException) {
+                    return false;
+                }
+            }
+
+            // Generate Cartesian product of individual resources for the bound variables
+            var elementSets = bindingSets.Select(kvp => kvp.Value.Select(r => new KeyValuePair<string, Value>(kvp.Key, r)));
+            var bindingCombinations = CartesianProduct(elementSets);
+
+            // The condition must be true for EVERY element combination
+            foreach (var bindCombo in bindingCombinations) {
+                EnvV scope = envV.NewScope();
+                foreach (var binding in bindCombo) {
+                    scope.Bind(binding.Key, binding.Value);
+                }
+                try {
+                    if (!Interpreter.EvalExp(query.Condition, scope, envH).AsBool()) {
+                        return false;
+                    }
+                } catch (Interpreter.MissingPropertyException) { 
+                    return false;
+                }
+            }
+            return true;
         });
-
-        // Step 4: Evaluate Condition if present
-        if (query.Condition != null) {
-            validAssignments = validAssignments.Where(assignment => {
-                var bindingSets = new List<KeyValuePair<string, List<ResourceVal>>>();
-                for (int i = 0; i < assignment.Count; i++) {
-                    if (groupedCandidateCombinations[i].LocalBinding != null) {
-                    bindingSets.Add(new KeyValuePair<string, List<ResourceVal>>(
-                        groupedCandidateCombinations[i].LocalBinding!,
-                        assignment[i]));
-                    }
-                }
-
-                if (!bindingSets.Any()) {
-                    // No bound variables; evaluate once
-                    try {
-                        return Interpreter.EvalExp(query.Condition, envV, envH).AsBool();
-                    } catch (Interpreter.MissingPropertyException) {
-                        return false;
-                    }
-                }
-
-                // Generate Cartesian product of individual resources for the bound variables
-                var elementSets = bindingSets.Select(kvp => kvp.Value.Select(r => new KeyValuePair<string, Value>(kvp.Key, r)));
-                var bindingCombinations = CartesianProduct(elementSets);
-
-                // The condition must be true for EVERY element combination
-                foreach (var bindCombo in bindingCombinations) {
-                    EnvV scope = envV.NewScope();
-                    foreach (var binding in bindCombo) {
-                        scope.Bind(binding.Key, binding.Value);
-                    }
-                    try {
-                        if (!Interpreter.EvalExp(query.Condition, scope, envH).AsBool()) {
-                            return false;
-                        }
-                    } catch (Interpreter.MissingPropertyException) { 
-                        return false;
-                    }
-                }
-                return true;
-            });
-        }
+        
 
         // Return flattened list of resources for each valid assignment
-        return validAssignments.Select(assignment => assignment.SelectMany(r => r).ToList());
+        return all_distinctCandidateTuples.Select(assignment => assignment.SelectMany(r => r).ToList());
     }
 
     //i.e. resolve re. (re and re...)
@@ -112,7 +134,7 @@ internal static class QueryEvaluator {
         //Available
         return new ResolvedSpec(
             //a named resource has only one possible combination (itself). wraped in double lists for equal treatment.
-            CandidateCombinations:
+            Candidates:
             [
                 [resource]
             ],
@@ -137,9 +159,36 @@ internal static class QueryEvaluator {
             return null;
 
         return new ResolvedSpec(
-            CandidateCombinations: combinations,
+            Candidates: combinations,
             //as: like a typecast, but returns null if not possible rather than throwing exception. Null-safe operator
             LocalBinding: (catSpec as CategorySpecWithBinding)?.LocalBindingId);
+    }
+
+  private static IEnumerable<List<List<ResourceVal>>> BuildDistinctCandidates(List<ResolvedSpec> all_CandidateSets) {
+
+        //Discards binding ids in each resolved (category) Spec
+        AllCandidateSets all_CandidateSets_withoutBinding = all_CandidateSets.Select(resolvedSpec => resolvedSpec.Candidates).ToList();
+
+        /* Step 2: Cartesian product  pick one candidate from each spec's candidateSet - i.e. all possible combinations bewteen resolved spec sets:     
+        [  [ [_room205] , [r2, r4] ] , [ [_room205] , [r2, r3] ] , [ [_room205] , [r3, r4] ]    ]*/ 
+        IEnumerable<List<List<ResourceVal>>> all_crossSpecCandidateTuples = CartesianProduct(all_CandidateSets_withoutBinding);
+
+        // Step 3: Discard cross-spec candidate tuples where the same resource appears in more than one element (_room205, _room205,  )
+        return all_crossSpecCandidateTuples.Where(HasNoResourceOverlap);
+    }
+
+    /* reserve _room205 and 2 Room [time] [condition]
+     e.g. crossSpecCandidate: [  [_room205] , [_room205, r4]  ] 
+     Both valid candidates, should however get rejected given the same resource can't be booked twice accross "and" at same time */
+    private static bool HasNoResourceOverlap(List<List<ResourceVal>> crossSpecCandidate) {
+
+        // [ _room205, _room205, r4 ]        <- [   [_room205] , [_room205, r4]  ]
+        List<ResourceVal> flatCandidateTupple =  crossSpecCandidate.SelectMany(resources => resources).ToList();
+
+        //               | [ _room205 , r4] |         != |[ _room205, _room205, r4  ]| i.e. duplicate elements within tuple 
+        return flatCandidateTupple.Distinct().Count() == flatCandidateTupple.Count;
+        
+        // Comparing amount of unique elements in list to amount of actual elements. If they differ, duplicates were present)
     }
 
 
@@ -181,8 +230,7 @@ internal static class QueryEvaluator {
 
     /// <summary> List of all candidate combinations(a list itself) for ONE resource spec: (r | a rc [id]) /// </summary>
     private record ResolvedSpec (
-        List<List<ResourceVal>> CandidateCombinations,
+        List<List<ResourceVal>> Candidates,
         string? LocalBinding
     );
-
 }
