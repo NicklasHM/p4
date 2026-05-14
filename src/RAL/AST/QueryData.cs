@@ -8,28 +8,50 @@ record class QueryData(
     Exp? Condition,                   //where clause / predicate
     RecurrenceSpec? Recurrence         //recurence information
 );
+/*________________________RESOURCES________________________*/
+/// <summary> Super for data for a single resource specification: a*rc [id] | r. </summary>
+abstract record class ResourceSpec;
 
-/// <summary> Holds data for a single resource specification: a*rc id | r. </summary>
-record class ResourceSpec(
-    Exp? Quantity,      // a
-    string? CategoryId, // rc
-    string? Identifier  // id for declaring local variable (nullable) | id of single named resource r 
-);
+/// <summary> id of single named resource </summary>
+record class ResourceInstanceSpec(
+    string ResourceId
+) : ResourceSpec;
 
-/// <summary> Data structure for time interval of query. 
-/// Classes may be further divided for exhaustiveness checking. </summary>
-record class TimeSpec(
+/// <summary> a rc. Quantity of a category (or subtypes). </summary>
+record class CategorySpec(
+    Exp Quantity,           // a
+    string CategoryId       // rc
+) : ResourceSpec;
+
+/// <summary> a rc id. Quantity of a category (or subtypes) with local variable binding. </summary>
+record class CategorySpecWithBinding(
+    Exp Quantity,           // a
+    string CategoryId,      // rc
+    string LocalBindingId   // id
+) : CategorySpec(Quantity, CategoryId);
+
+
+/*________________________TIME________________________*/
+/// <summary> Data structure for time interval of query.
+abstract record class TimeSpec(
     Exp Start,     // DateTime
     Exp EndMarker // "to" DateTime | "For" Duration
 );
+record class TimeSpecTo(Exp Start, Exp To): TimeSpec(Start, To);
+record class TimeSpecFor(Exp Start, Exp For): TimeSpec(Start, For);
 
-/// <summary>
-/// Data structure for reccurrence information
-/// </summary>
-record class RecurrenceSpec(
-    RecurrenceMode Mode, //STRICT | FLEXIBLE
-    Exp EveryDuration,        //"every" Duration. Defines interval between reservations
-    Exp EndMarker        // "until" DateTime | "for" Duration
-);
+
+/*________________________RECURRENCE________________________*/
+/// <summary> Data structure for reccurrence information </summary>
+record class RecurrenceSpec(RecurrenceMode Mode, RecurrenceInterval Time);
 
 enum RecurrenceMode { STRICT, FLEXIBLE }
+
+/// <summary> Defines interval between reservations until end. Recurrance interval hierarchy super. "every" Duration, ("until" DateTime | "for" Duration) </summary>
+abstract record class RecurrenceInterval(Exp Every, Exp EndMarker);
+
+///(Duration, DateTime)
+record class RecurrenceUntil(Exp Every, Exp Until ): RecurrenceInterval(Every, Until);
+
+/// (Duration, Duration)
+record class RecurrenceFor(Exp Every, Exp For ): RecurrenceInterval(Every, For);

@@ -44,10 +44,11 @@ class Program {
                 Console.WriteLine("\n" + error + "\n");
             }
 
-            Interpreter.EvalStmt(program, new EnvV(), new EnvH());
-
+            Interpreter.ExecStmt(program, new EnvV(), new EnvH(), new EnvTem());
+            
             Console.WriteLine(ResourceRegistry.Instance().ToString());
 
+            Console.WriteLine(ReservationRegistry.Instance().ToString());
 
         } else {
             Console.WriteLine($"Parsing failed with {parser.errors.count} error(s).");
