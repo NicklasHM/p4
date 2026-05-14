@@ -35,12 +35,6 @@ public class EnvH {
         return parentCatRelations.TryGetValue(childCat, out parent);
     }
 
-    //Returns a 'list' of all immediate children categories
-    public IEnumerable<ResourceT> GetChildren(ResourceT category) =>
-    parentCatRelations
-        .Where(kvp => kvp.Value == category)
-        .Select(kvp => kvp.Key);
-
      public IEnumerable<ResourceT>? GetAllRelated(ResourceT category) {
         //Set of all related nodes, ancesters and decendants
         var result = new HashSet<ResourceT>();
@@ -58,26 +52,38 @@ public class EnvH {
         }
         
         // Downwards, descendants
-        foreach (ResourceT node in GetSubtree(category)) {
+        foreach (ResourceT node in GetSubTree(category)) {
             result.Add(node);
         }
 
         return result;
     }
 
-    // Used by: LookupCategoryPropertyType (reserve where-clause only)
-    public IEnumerable<ResourceT> GetSubtree(ResourceT category) {
-        var result = new HashSet<ResourceT>();
-        var stack = new Stack<ResourceT>();
-        stack.Push(category);
+    /// <summary> flat enumarable of subCategories (including itself), organised by descendant level </summary>
+    /// Used by: LookupCategoryPropertyType (reserve where-clause only)
+    public IEnumerable<ResourceT> GetSubTree(ResourceT category) {
         
-        while (stack.Count > 0) {
-            var node = stack.Pop();
-            if (result.Add(node))
-                foreach (var child in GetChildren(node))
-                    stack.Push(child);
+        HashSet<ResourceT> subCategories  = [];
+        
+        //breadth first, i.e. organised by nearest descendants
+        var queue = new Queue<ResourceT>();
+        queue.Enqueue(category);
+
+        while (queue.Count > 0) {
+            ResourceT current = queue.Dequeue();
+            subCategories.Add(current);
+
+            foreach (ResourceT child in GetChildren(current))
+                queue.Enqueue(child);
         }
-        return result;
+
+        return subCategories;
     }
+
+    /// <summary> Find all categories whose immediate parent is 'current' </summary>
+    private IEnumerable<ResourceT> GetChildren(ResourceT category) =>  
+        parentCatRelations
+            .Where(relation => relation.Value == category)
+            .Select(relation => relation.Key);
 
 }

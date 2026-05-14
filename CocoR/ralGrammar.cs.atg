@@ -413,14 +413,16 @@ PRODUCTIONS
   // a*rc id (qty of category with local variable binding for constraints) | r.
    ResourceExp<. out List<ResourceSpec> resources .> = (. resources = new List<ResourceSpec>(); Exp? quantity = null; string? categoryId = null; string? identifier = null; .)   
     ( 
-      IF(FollowedByAND_or_FROM()) ident /* r  */ (. identifier = t.val; .)
+      IF(FollowedByAND_or_FROM()) ident /* r  */ (. resources.Add(new ResourceInstanceSpec(t.val)); .)
       |
       AdditiveExp<out Exp exp>          /* a  */ (. quantity = exp; .)     //At interpretaion, only makes sense for natural numbers
       ident                             /* rc */ (. categoryId = t.val; .)
       [
-        ident            /* local var binding */ (. identifier = t.val; .)
+        ident            /* local var binding */ (. identifier = t.val; resources.Add(new CategorySpecWithBinding(quantity, categoryId, identifier)); .)
       ]
-    )       (. resources.Add(new ResourceSpec(quantity, categoryId, identifier)); .)            
+      //No local var binding, identifier was set to null on nonterminal entry meaning the above case did not happen    
+      (. if (identifier == null) { resources.Add(new CategorySpec(quantity, categoryId)); }.)
+    )                   
     { "and"   /* Re and Re:   composite without left recursion */
       ResourceExp <. out List<ResourceSpec> continuation .>   (. resources.AddRange(continuation);.)
     }    
@@ -430,13 +432,13 @@ PRODUCTIONS
 /*__________________________________________TIME__________________________________________*/
 
 /*                              Typecheck requires*/
-  Time<out TimeSpec timeInterval>  =              (. Exp? endMarker = null;  .)   
-    "from" Exp<out Exp startDateTime> /*DateTime*/ 
+  Time<out TimeSpec timeInterval>  =                      //To bypass needing initialization before control leaves
+    "from" Exp<out Exp startDateTime> /*DateTime*/        (. timeInterval = new TimeSpecTo(startDateTime, startDateTime);.)
     ( 
-    "to" AdditiveExp<out Exp toDatetime> /*DateTime*/     (. endMarker = toDatetime; .) //jump over nonterminals with logical operators, to avoid ambiguity exp and exp
+    "to" AdditiveExp<out Exp toDatetime> /*DateTime*/     (. timeInterval = new TimeSpecTo(startDateTime, toDatetime);.) //jump over nonterminals with logical operators, to avoid ambiguity exp and exp
     | 
-    "for" AdditiveExp<out Exp forDuration> /*Duration*/   (. endMarker = forDuration; .)
-    )                                             (. timeInterval = new TimeSpec(startDateTime, endMarker); .)
+    "for" AdditiveExp<out Exp forDuration> /*Duration*/   (. timeInterval = new TimeSpecFor(startDateTime, forDuration);   .)
+    )
   .
 
   Datetime<out Exp exp> = (. string dateTimeToParse = null; .) 
@@ -485,16 +487,16 @@ PRODUCTIONS
 
                    
   Recurrence<out RecurrenceSpec recurrence> = //assigning default to bypass unassigned local variable error in parser  
-    "recurring"                       (. RecurrenceMode mode = RecurrenceMode.STRICT; Exp? endMarker = null; .)
+    "recurring"                       (. RecurrenceMode mode = RecurrenceMode.STRICT; RecurrenceInterval? interval = null; .)
     ( 
       "strict"                        (. mode = RecurrenceMode.STRICT; .)
       | 
       "flexible"                      (. mode = RecurrenceMode.FLEXIBLE; .)
     )             
     "every" Exp<out Exp everyDuration>     
-    ( "until" AdditiveExp<out Exp toDatetime> (. endMarker = toDatetime; .) //jump over logical operator nonterminals to avoid ambiguity between exp and exp
-    | "for" AdditiveExp<out Exp forDuration>  (. endMarker = forDuration; .)
-    )                                 (. recurrence = new RecurrenceSpec(mode, everyDuration, endMarker); .)
+    ( "until" AdditiveExp<out Exp toDatetime> (. interval = new RecurrenceUntil(everyDuration, toDatetime); .) //jump over logical operator nonterminals to avoid ambiguity between exp and exp
+    | "for" AdditiveExp<out Exp forDuration>  (. interval = new RecurrenceFor(everyDuration, forDuration); .)
+    )                                         (. recurrence = new RecurrenceSpec(mode, interval); .)
   .
 
 END RAL.

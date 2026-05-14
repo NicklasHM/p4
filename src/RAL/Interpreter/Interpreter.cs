@@ -1,54 +1,37 @@
-using System.Dynamic;
-using Microsoft.Win32;
 using RAL.AST;
-using RAL.TC;
-
 namespace RAL.Interpreter;
-
-/*
-Expression interpreter for arithmetic and boolean expressions.
-
-This interpreter evaluates AST expression nodes into runtime values.
-It currently supports:
-- Number, boolean, and string literals
-- Arithmetic operators: +, -, *, /
-- Numeric comparisons: <, >, <=, >=
-- Equality operators: ==, !=
-- Boolean operators: and, or, not
-
-The interpreter assumes that the type checker has already accepted the program.
-Runtime checks are still used for cases such as division by zero.
-*/
 
 public class Interpreter {
     private const float Epsilon = 0.00001f;
 
-    //Evaluates a statement with pattern matching on the AST nodes
+    private static readonly ReservationRegistry reservationRegistry = ReservationRegistry.Instance();
+    private static readonly ResourceRegistry resourceRegistry = ResourceRegistry.Instance();
 
-    public static void EvalStmt(Stmt stmt, EnvV envV, EnvH envH)
+    //Executes a statement with pattern matching on the AST nodes
+    public static void ExecStmt(Stmt stmt, EnvV envV, EnvH envH, EnvTem envTem)
     {
         switch(stmt)
         {   case Skip: break;
            
-            case Composite c: HandleComposite(c, envV, envH); break;
+            case Composite c: HandleComposite(c, envV, envH, envTem); break;
            
-            case If i: HandleIf(i, envV, envH); break;
+            case If i: HandleIf(i, envV, envH, envTem); break;
 
             case VarDecl vd: HandleVarDecl(vd, envV); break;
 
             case CategoryDecl cd: ExecCategoryDecl(cd, envH); break;
             case ResourceDecl rd: ExecResourceDecl(rd, envV, envH); break;
 
-            //case TemplateDecl
-            //case TemplateCall
+            case TemplateDecl td: ExecTemplateDecl(td, envTem); break;
+            case TemplateCall tc: ExecTemplateCall(tc, envV, envH, envTem); break;
 
             case Move m: ExecMove(m, envV); break;
 
-            //case Cancel c: 
+            case Cancel c: ExecCancel(c, envV, envH); break;
 
             case ExpStmt s: Console.WriteLine(EvalExp(s.Expression, envV, envH)); break;
 
-            // case Availability av
+            case Availability av: HandleAvailability(av, envV, envH); break;
             default: throw new Exception($"Unknown Statement: " + stmt.ToString());
         }
     }
@@ -64,13 +47,15 @@ public class Interpreter {
 
             Reference r => EvalReference(r, envV),
             
-            //Reserve reserveNode => EvalReserve(reserveNode.Query,)
-            // reschedule join
-
             Assignment a => EvalAssignment(a, envV, envH),
+            
+            Reserve reserveNode => EvalReserve(reserveNode, envV, envH),
+            
+            Reschedule rescheduleNode => HandleReschedule(rescheduleNode, envV, envH),
 
-            UnaryOperation u => EvalUnary(u, envV, envH),
             BinaryOperation b => EvalBinary(b, envV, envH), //  (reserve1, reserve2) defined for or, and, seq. Returns a composite reservation
+            
+            UnaryOperation u => EvalUnary(u, envV, envH),
 
 
             _ => throw new Exception($"Line {exp.LineNumber}: Unsupported expression.")
@@ -79,22 +64,22 @@ public class Interpreter {
 
     /* ________________________Statement Handlers______________________________*/
     
-    private static void HandleComposite (Composite c, EnvV envV, EnvH envH) {
+    private static void HandleComposite (Composite c, EnvV envV, EnvH envH, EnvTem envTem) {
         // Evaluates left subtree first
-        if(c.Stmt1 != null) EvalStmt(c.Stmt1, envV, envH);
+        ExecStmt(c.Stmt1, envV, envH, envTem);
         // Right subtree
-        if(c.Stmt2 != null) EvalStmt(c.Stmt2, envV, envH);        
+        ExecStmt(c.Stmt2, envV, envH, envTem);        
     }
 
-    private static void HandleIf(If ifNode, EnvV envV, EnvH envH) {
+    private static void HandleIf(If ifNode, EnvV envV, EnvH envH, EnvTem envTem) {
         //Evaluate condition to interpreter values
         Value condition = EvalExp(ifNode.Condition, envV, envH);
 
         //Downcast and extract bool value, guarenteed by typechecking. Bodies will be skip
         if (condition.AsBool())
-            EvalStmt(ifNode.ThenBody, envV.NewScope(), envH); //will be skip if empty {}
+            ExecStmt(ifNode.ThenBody, envV.NewScope(), envH, envTem); //will be skip if empty {}
         else 
-            EvalStmt(ifNode.ElseBody, envV.NewScope(), envH); //will be skip if excluded or empty {}
+            ExecStmt(ifNode.ElseBody, envV.NewScope(), envH, envTem); //will be skip if empty {} or 'else' ommitted entirely in src code
     }
 
     private static void HandleVarDecl(VarDecl vdNode, EnvV envV) {
@@ -107,8 +92,7 @@ public class Interpreter {
 
     /// <summary> Returns default values of uninitialized variables </summary>
     private static Value GetDefaultValue(TypeT type) => 
-    type switch 
-        {
+    type switch {
             BoolT => new BoolVal(false),
             NumberT => new NumberVal(0),
             StringT => new StringVal(""),
@@ -121,6 +105,15 @@ public class Interpreter {
 
             _ => throw new Exception("VarDecl node with unsupported type")
         };
+
+    private static void ExecCategoryDecl(CategoryDecl categoryDecl, EnvH envH) {
+
+        //Add it to the registry, such that resources of this category can be added to it
+        resourceRegistry.RegisterCategory(categoryDecl.CategoryId);        
+
+        //Relate it to its immediate super in envH
+        envH.EstablishRelation(categoryDecl.CategoryId, categoryDecl.ParentId);
+    }
 
     private static void ExecResourceDecl(ResourceDecl resDecl, EnvV envV, EnvH envH) {
 
@@ -178,27 +171,77 @@ public class Interpreter {
         envV.Bind(resDecl.Identifier, resource);
 
         //Add resource to the global registry, indexed by its category
-        ResourceRegistry.Instance().AddResource(resDecl.Type.Category, resource);
+        resourceRegistry.AddResource(resDecl.Type.Category, resource);
     }
 
-    private static void ExecCategoryDecl(CategoryDecl categoryDecl, EnvH envH) {
+    private static void ExecTemplateDecl(TemplateDecl node, EnvTem envTem) {
 
-        //Add it to the registry, such that resources of this category can be added to it
-        ResourceRegistry.Instance().RegisterCategory(categoryDecl.CategoryId);        
+        //Temporary list for extracting formal param names
+        List<string> parameterNames = [];
 
-        //Relate it to its immediate super in envH
-        envH.EstablishRelation(categoryDecl.CategoryId, categoryDecl.ParentId);
+        //Extract from the template declaration node
+        foreach (VarDecl varDecl in node.ParamList) {
+            parameterNames.Add(varDecl.Identifier);                                                
+        }
+
+        //Create new entry in Template Table (fTable)
+        envTem.Bind(node.TemplateId, parameterNames, node.TemplateBody); 
+    }
+
+    private static void ExecTemplateCall(TemplateCall node, EnvV envV, EnvH envH, EnvTem envTem) {
+        //New scope for params
+        EnvV templateScope = envV.NewScope();
+
+        (List<string> parameterNames, Stmt body) = envTem.Lookup(node.TemplateId);
+        
+        //Extract from the template declaration node
+        for (int i = 0; i < node.ArgList.Count; i++) {
+
+            //Evaluate the argument
+            Value evaluatedArg = EvalExp(node.ArgList[i], envV, envH);
+
+            //Bind actual parameters to formal parameters
+            templateScope.Bind(parameterNames[i], evaluatedArg);                                                
+        }
+
+        //Execute body
+        ExecStmt(body, templateScope, envH, envTem);        
     }
 
     private static void ExecMove(Move moveNode, EnvV envV) {
 
         ResourceVal resourceToMove = (ResourceVal) envV.Lookup(moveNode.ResourceId);
 
-        //Move to the righ category in the registry
-        ResourceRegistry.Instance().MoveResource(resourceToMove, moveNode.Type.Category); 
+        //Move to the right category in the registry
+        resourceRegistry.MoveResource(resourceToMove, moveNode.Type.Category); 
 
         //Update categoryId on the resource for easy, currently innit only. Fix
         resourceToMove.CategoryId = moveNode.Type.Category;
+    }
+
+    private static void ExecCancel(Cancel cancelNode, EnvV envV, EnvH envH) {
+
+        //Extract the reservation from the Expression
+        ReservationVal reservation = (ReservationVal) EvalExp(cancelNode.Reservation, envV, envH);
+
+        //Remove it from the central registry, also sets variable value to null
+        reservationRegistry.CancelReservation(reservation);
+    }
+
+     private static void HandleAvailability(Availability av, EnvV envV, EnvH envH) {
+        (DateTime originalStart, DateTime originalEnd, TimeSpan duration) = ComputeTime(av.Query.Interval, envV, envH);
+        ResolvedQuery baseQuery = new ResolvedQuery(av.Query.ResourceSpecs, originalStart, originalEnd, av.Query.Condition);
+        
+        var validCombinations = QueryEvaluator.EvaluateQuery(baseQuery, envV, envH);
+        
+        if (validCombinations.Any()) {
+            Console.WriteLine($"Availability check succeeded for period {originalStart} to {originalEnd}. Valid combinations found:");
+            foreach(var combo in validCombinations) {
+                Console.WriteLine("  [" + string.Join(", ", combo.Select(r => r.ResourceId)) + "]");
+            }
+        } else {
+            Console.WriteLine("Availability check failed: No resources satisfy the query.");
+        }
     }
 
     /*_____________________Expression Handlers_____________________*/
@@ -213,8 +256,12 @@ public class Interpreter {
         else {
             //Downcast justified by typechecker, exception -> type-checker logic issue
             ResourceVal resource = (ResourceVal) envV.Lookup(r.VariableId);
-            //Again an exception -> logic error in type-checker
-            return resource.Properties[r.PropertyId];
+            
+            if (resource.Properties.TryGetValue(r.PropertyId, out Value? val)) {
+                return val;
+            } else {
+                throw new MissingPropertyException($"Property '{r.PropertyId}' not found on resource '{resource.ResourceId}'.");
+            }
         }        
     }
 
@@ -242,16 +289,108 @@ public class Interpreter {
         return value;
     }
 
-    //Right operand Exp rightExp is intentionally not evaluated here. 
+/// <summary> Evaluates reserve leaf nodes, covering two cases. 1: simple, 2: with recurring </summary>
+    private static ReservationVal EvalReserve(Reserve reserveNode, EnvV envV, EnvH envH) {
+        QueryData originalQuery = reserveNode.Query;        
+
+        //Extract reservation time period for the base query
+        (DateTime originalStart, DateTime originalEnd, TimeSpan duration) = ComputeTime(originalQuery.Interval, envV, envH);
+
+        //Treat all queries equally. Wether an AST without recurring or simulated for requrrence         
+        ResolvedQuery baseQuery = new ResolvedQuery(originalQuery.ResourceSpecs, originalStart, originalEnd, originalQuery.Condition);
+
+        ReservationVal result = EvalReserveAtom(baseQuery, envV, envH); 
+
+        //Case 1: Simple reserve node, no recurring
+        if (originalQuery.Recurrence == null) {
+            return result;
+        } 
+        
+        //Case 2: reserve node with recurring -> simmulate making queryData objects of nodes. Resolved queries shows purpose here.
+        
+        List<ResolvedQuery> timeSlots = new() { baseQuery };
+        (TimeSpan timeBetween, DateTime recurrenceEnd) = ComputeRecurrencePeriod(originalQuery.Recurrence.Time, originalStart, envV, envH);
+        
+        //Accumulate each atomic reservation request, starting from the second reservation occurrence.
+        for (DateTime slotStart = originalStart + timeBetween; slotStart <= recurrenceEnd; slotStart += timeBetween) {
+
+            // create identical reservation requests with start and end time shifted by the specified amount (timeBetween: e.g. 'every 7d')
+            timeSlots.Add(baseQuery with {Start = slotStart, End = slotStart + duration}); 
+        }
+
+        //Skip evaluating the first reservation in the recurrence list as it has already been evaluated and stored in 'result'
+        foreach (ResolvedQuery slot in timeSlots.Skip(1)) { 
+
+            result = originalQuery.Recurrence.Mode switch {
+
+                RecurrenceMode.STRICT => EvalReserveAND(result, () => EvalReserveAtom(slot, envV, envH)),
+
+                RecurrenceMode.FLEXIBLE => EvalReserveSEQ(result, () => EvalReserveAtom(slot, envV, envH)),
+
+                _ => throw new Exception("Unknown recurrence mode.")
+            };
+        }
+        return result;
+    }
+
+     private static ReservationVal EvalReserveAtom(ResolvedQuery query, EnvV envV, EnvH envH) {
+        var validCombinations = QueryEvaluator.EvaluateQuery(query, envV, envH);
+
+        if (validCombinations.Any()) {
+            var selectedCombination = validCombinations.First();
+            var atom = new ReservationAtomVal(selectedCombination, new DateTimeVal(query.Start), new DateTimeVal(query.End));
+            var newReservation = new ReservationVal(new List<ReservationAtomVal> { atom });
+
+            reservationRegistry.RegisterReservation(newReservation);
+            return newReservation;
+        }
+
+        return new ReservationVal(new List<ReservationAtomVal>()); // Failed
+    }
+
+    /// <summary> Returns a tupple of start DateTime and end DateTime in unwrapped, c# types </summary>
+    private static (DateTime, DateTime, TimeSpan) ComputeTime(TimeSpec timeSpec, EnvV envV, EnvH envH){
+
+        //Evaluate the expressions within timespec
+        Value startVal = EvalExp(timeSpec.Start, envV, envH);
+        Value endMarkerVal = EvalExp(timeSpec.EndMarker, envV, envH);
+
+        //Return unwrapped c#
+        return (startVal, endMarkerVal) switch {   //start dt,    end dt,  duration of reservation
+            (DateTimeVal start, DateTimeVal to) => (start.Value, to.Value, to.Value - start.Value),
+            (DateTimeVal start, DurationVal For) =>(start.Value, start.Value + For.Value, For.Value),
+            _ => throw new Exception("Invalid time specification.\n") 
+        };
+
+    }
+
+    /// <summary> Returns a tupple of start DateTime and end DateTime in unwrapped, c# types </summary>
+    private static (TimeSpan, DateTime) ComputeRecurrencePeriod(RecurrenceInterval recurrence, DateTime start, EnvV envV, EnvH envH) {
+        
+        Value everyVal = EvalExp(recurrence.Every, envV, envH);
+        Value endMarkerVal = EvalExp(recurrence.EndMarker, envV, envH);
+
+        return (everyVal, endMarkerVal) switch {
+            
+            (DurationVal every, DateTimeVal until) => (every.Value, until.Value),
+
+            (DurationVal every, DurationVal For) => (every.Value, start + For.Value),
+
+         _ => throw new Exception("Invalid recurrence specification.\n") 
+            
+        };
+    }
+
+    /// <summary> Regular path: Coming from a binary operation node. Right operand Exp rightExp is intentionally not evaluated here. </summary>
     private static ReservationVal EvalBinaryReserve(BinaryOperator op, ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
 
         return op switch {
 
             BinaryOperator.OR => EvalReserveOR(leftReservation, rightExp, envV, envH),
 
-            BinaryOperator.AND => EvalReserveAND(leftReservation, rightExp, envV, envH),
+            BinaryOperator.AND => EvalReserveAND(leftReservation, () => (ReservationVal) EvalExp(rightExp, envV, envH)),
 
-            BinaryOperator.SEQ => EvalReserveSEQ(leftReservation, rightExp, envV, envH),
+            BinaryOperator.SEQ => EvalReserveSEQ(leftReservation, () => (ReservationVal) EvalExp(rightExp, envV, envH)),
 
             _ => throw new Exception("Unexpected operator in reservation binary")
             
@@ -268,34 +407,76 @@ public class Interpreter {
 
         else //left reserve attempt did not fail, return it without having attempted reserving right
             return leftReservation; 
-        
     }
 
-    private static ReservationVal EvalReserveAND(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
+    /// <summary> Both must succeed. Rolls back left if right fails. 
+    /// Two paths lead here: 1. Binary AND operation, 2. STRICT reccurrence evaluation from a leaf. </summary>
+    private static ReservationVal EvalReserveAND(ReservationVal leftReservation, Func<ReservationVal> evaluateRight ) {
 
         //Case 1: left failed, don't attempt right. No reservations to delete. The empty list in left indicates a failure.
         if (leftReservation.Failed()) 
             return leftReservation;
 
-        //
-        ReservationVal rightReservation = (ReservationVal) EvalExp(rightExp, envV, envH);
+        //Left didnt fail, evaluate right with the passed function from parameter.
+        ReservationVal rightReservation = evaluateRight();
 
         //Case 2: left succeded, right failed.
         if (rightReservation.Failed()) {
 
-            // Delete all reservatiosn in left. 
+            // Delete all reservations in left. 
+            leftReservation.Reservations.Clear();
+
+            //Remove from register
+            reservationRegistry.CancelReservation(leftReservation);
+            
+            //return a reservationVal with an empty list -> indicates failed reservation attempt
+            return leftReservation;
         }
 
         //Case 3: both succeded
         else {
+            //Combine reservations to a composite, in the original
+            leftReservation.Reservations.AddRange(rightReservation.Reservations);
+            reservationRegistry.CancelReservation(rightReservation);
+            //return the reservation which is now interpreted as a composite
+            return leftReservation;
+        }
+    }
 
-            //Concatenate the reservationList
-        }      
+    /// <summary> Two paths lead here: 1. Binary reserve operation, 2. FLEXIBLE reccurrence evaluation from a leaf. </summary>
+    private static  ReservationVal EvalReserveSEQ(ReservationVal leftReservation, Func<ReservationVal> evaluateRight ) {
+        ReservationVal rightReservation = evaluateRight();
+
+        //Combine reservations to a composite, in the original - wether either were empty
+        leftReservation.Reservations.AddRange(rightReservation.Reservations);
+        reservationRegistry.CancelReservation(rightReservation);
         return leftReservation;//stub for compiler errors  
     }
 
-    private static  ReservationVal EvalReserveSEQ(ReservationVal leftReservation, Exp rightExp, EnvV envV, EnvH envH ) {
-        return leftReservation;//stub for compiler errors  
+    private static Value HandleReschedule(Reschedule node, EnvV envV, EnvH envH) {
+
+        //Evaluate exp node to runtime reservation
+        ReservationVal reservation = (ReservationVal) EvalExp(node.Reservation, envV, envH);
+
+        //Not possible for composite reservations
+        if (reservation.IsComposite() || reservation.Failed()) return new ReservationVal([]); //Indicates failure
+
+        //Simple reservations, extract it
+        ReservationAtomVal atomicReservation = reservation.Reservations[0];
+
+        //Extract requested time slot. _ discards the third value of the returned 3-tuple
+        (DateTime requestedStart, DateTime requestedEnd, _) = ComputeTime(node.NewTimeInterval, envV, envH);
+
+        //If any of the resources are unavailable, indicate failure each resource's availability in newly requested time
+        if (atomicReservation.Resources.Any(resource => !reservationRegistry.IsAvailable(resource, requestedStart, requestedEnd)))
+            return new ReservationVal([]); //Indicates failure
+        
+        //Update time properties of the existing reservation
+        atomicReservation.Start = new DateTimeVal(requestedStart);
+        atomicReservation.End = new DateTimeVal(requestedEnd);
+
+        //Return the entire reservation
+        return reservation; 
     }
 
     private static Value EvalBinary(BinaryOperation exp, EnvV envV, EnvH envH) {
@@ -477,5 +658,9 @@ public class Interpreter {
         // Because Number is represented as float, zero is also checked using epsilon.
         if (NumberEquals(value, 0f))
             throw new Exception($"Line {lineNumber}: Division by zero.");
+    }
+
+    public class MissingPropertyException : Exception {
+        public MissingPropertyException(string message) : base(message) {}
     }
 }
