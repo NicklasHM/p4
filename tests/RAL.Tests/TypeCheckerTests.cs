@@ -4,6 +4,16 @@ using RAL.TC;
 namespace RAL.Tests;
 
 /*
+ * Test level: mixed.
+ *   - 'Direct AST construction' sub-sections are unit-flavoured
+ *     (TypeChecker visitor on a hand-built node, no parser).
+ *   - 'Source programs' sub-sections are integration-flavoured
+ *     (parser + typechecker, run together).
+ *
+ * Per Thomsen, this fluidity is normal in compiler projects: a typechecker
+ * visitor needs an AST and recurses through sibling visitors, so its tests
+ * often "have the flavor of integration tests."
+ *
  * Tests for the TypeChecker.
  * Every program tested here must parse correctly;
  * only semantic/type rules are under scrutiny.
@@ -557,9 +567,8 @@ public class TypeCheckerTests
     [Fact]
     public void DuplicateCategory_IsRejected()
     {
-        // Declaring the same category twice.
-        // Intended: typechecker must add an error to tc.errors (current impl
-        // throws via EnvH.EstablishRelation on the duplicate Add).
+        // Declaring the same category twice must surface via tc.errors,
+        // carrying the offending category name and the word "already".
         const string src = "category Room;\ncategory Room;";
         TestHelpers.TypeCheckShouldReportError(src, "Room", "already");
     }
@@ -586,17 +595,17 @@ public class TypeCheckerTests
     public void ReserveWhereUnknownProperty_IsRejectedWithSemanticError()
     {
         // 'floors' is not a declared property of any Room resource.
-        // Intended: typechecker must add an error to tc.errors.
-        // Current implementation silently returns NumberT for unknown fields — test will FAIL.
+        // The typechecker must add an error to tc.errors rather than silently
+        // returning a type for the unknown field.
         TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidReserveWhereUnknownProperty);
     }
 
     [Fact]
     public void ReserveWhereUnknownAlias_IsRejectedWithSemanticError()
     {
-        // Alias 'x' was never introduced in the resource spec.
-        // Intended: typechecker must add an error to tc.errors.
-        // Current implementation throws via envV.Lookup — test will FAIL.
+        // Alias 'x' was never introduced in the resource spec; only 'r' was.
+        // The typechecker must add an error to tc.errors rather than letting
+        // envV.Lookup throw for the unbound alias.
         TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidReserveWhereUnknownAlias);
     }
 
@@ -620,7 +629,10 @@ public class TypeCheckerTests
     [Fact]
     public void TemplateCall_WrongArgCount_IsRejectedWithSemanticError()
     {
-        // Template expects 2 arguments but call supplies 1 → tc.errors must be non-empty.
+        // Template expects 2 arguments but call supplies 1.
+        // tc.errors must contain a message naming the template ("booking") and
+        // the word "arguments". The typechecker returns after reporting the
+        // count mismatch so no out-of-range indexing happens in the per-arg loop.
         TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidTemplateCallWrongArgCount,
             "booking", "arguments");
     }
@@ -628,10 +640,8 @@ public class TypeCheckerTests
     [Fact]
     public void TemplateCall_UnknownTemplate_IsRejectedWithSemanticError()
     {
-        // Calling an undeclared template must add an error to tc.errors.
-        // Intended behavior: errors.Add, not a thrown exception.
-        // If the current implementation throws, this test will FAIL —
-        // that failure is the signal that envT.Lookup must be fixed.
+        // Calling an undeclared template must surface through tc.errors, not
+        // through an unhandled exception from envT.Lookup.
         TestHelpers.TypeCheckShouldReportError(TestPrograms.InvalidTemplateCallUnknownTemplate);
     }
 

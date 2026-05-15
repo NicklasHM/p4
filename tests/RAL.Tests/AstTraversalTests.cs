@@ -3,6 +3,11 @@ using RAL.AST;
 namespace RAL.Tests;
 
 /*
+ * Test level: integration (parser + AST builder). Per Thomsen, the boundary
+ * between unit and integration is fluid for compilers; asserting on parser
+ * output exercises two phases together, which is the realistic input space
+ * the downstream phases ever see.
+ *
  * AST-shape tests for the parser's output.
  *
  * Tests assert on specific fields of named AST nodes (operators, identifiers,
@@ -254,10 +259,9 @@ public class AstTraversalTests
         Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
         var reserve = Assert.IsType<Reserve>(rhs);
         Assert.Single(reserve.Query.ResourceSpecs);
-        var spec = reserve.Query.ResourceSpecs[0];
-        Assert.Equal("myRoom", spec.Identifier);
-        Assert.Null(spec.Quantity);    // named resource form, not quantity-based
-        Assert.Null(spec.CategoryId);  // named resource form, not category-based
+        // Named-resource form parses to ResourceInstanceSpec (not the category subtypes).
+        var spec = Assert.IsType<ResourceInstanceSpec>(reserve.Query.ResourceSpecs[0]);
+        Assert.Equal("myRoom", spec.ResourceId);
         Assert.IsType<DateTimeV>(reserve.Query.Interval.Start);
         Assert.IsType<DateTimeV>(reserve.Query.Interval.EndMarker);
     }
@@ -273,8 +277,8 @@ public class AstTraversalTests
         var c2 = Assert.IsType<Composite>(c1.Stmt2);
         var avail = Assert.IsType<Availability>(c2.Stmt2);
         Assert.Single(avail.Query.ResourceSpecs);
-        var spec = avail.Query.ResourceSpecs[0];
-        Assert.Equal("myRoom", spec.Identifier);
+        var spec = Assert.IsType<ResourceInstanceSpec>(avail.Query.ResourceSpecs[0]);
+        Assert.Equal("myRoom", spec.ResourceId);
         Assert.IsType<DateTimeV>(avail.Query.Interval.Start);
         Assert.IsType<DateTimeV>(avail.Query.Interval.EndMarker);
         Assert.Null(avail.Query.Condition);
@@ -510,8 +514,8 @@ public class AstTraversalTests
         // "reserve … recurring strict every 1 week until 30/06-2026" must populate
         //   Reserve.Query.Recurrence = RecurrenceSpec(
         //     Mode = STRICT,
-        //     EveryDuration = DurationV(7 days),
-        //     EndMarker = DateTimeV(30/06/2026))
+        //     Time = RecurrenceUntil(Every = DurationV(7 days),
+        //                            Until = DateTimeV(30/06/2026)))
         // Pins the parser output that RecurrenceIsWellTyped walks.
         Stmt root = TestHelpers.ParseShouldSucceed(TestPrograms.ValidRecurringStrictUntil);
         Exp rhs = TestHelpers.ExtractFirstAssignmentRhs(root);
@@ -521,10 +525,13 @@ public class AstTraversalTests
         var recurrence = reserve.Query.Recurrence!;
         Assert.Equal(RecurrenceMode.STRICT, recurrence.Mode);
 
-        var every = Assert.IsType<DurationV>(recurrence.EveryDuration);
+        // "until" form parses to RecurrenceUntil (not RecurrenceFor).
+        var until = Assert.IsType<RecurrenceUntil>(recurrence.Time);
+
+        var every = Assert.IsType<DurationV>(until.Every);
         Assert.Equal(TimeSpan.FromDays(7), every.Value);
 
-        var endDate = Assert.IsType<DateTimeV>(recurrence.EndMarker);
+        var endDate = Assert.IsType<DateTimeV>(until.EndMarker);
         Assert.Equal(new DateTime(2026, 6, 30), endDate.Value.Date);
     }
 }

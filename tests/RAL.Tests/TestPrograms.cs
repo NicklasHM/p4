@@ -4,11 +4,11 @@ namespace RAL.Tests;
  * Reusable RAL source-program strings used across all test classes.
  *
  * IMPORTANT — reserved keywords in RAL that cannot be used as identifiers:
- *   move, to, cancel, if, then, else, Resource, Number, Bool, String,
- *   Category, Reservation, DateTime, Duration, category, is, a, template,
- *   or, and, seq, not, true, false, reschedule, use, check, reserve, where,
- *   from, for, w, week, weeks, d, day, days, h, hour, hours, m, minute,
- *   minutes, recurring, strict, flexible, every, until
+ *   move, to, cancel, if, then, else, Number, Bool, String, Category,
+ *   Reservation, DateTime, Duration, category, is, a, template, or, and,
+ *   seq, not, true, false, reschedule, use, check, reserve, where, from,
+ *   for, w, week, weeks, d, day, days, h, hour, hours, m, minute, minutes,
+ *   recurring, strict, flexible, every, until
  *
  * All variable names below are chosen to avoid these keywords.
  */
@@ -363,6 +363,15 @@ static class TestPrograms
         "Reservation res = reserve myRoom from 15/03-2026 to 16/03-2026 " +
         "recurring flexible every 1 week for 4 weeks;";
 
+    // Runtime-deterministic recurrence: "every 1 week for 3 weeks" anchored at
+    // 15/03-2026 → start dates 15/03, 22/03, 29/03, 5/04. Each atom is one day
+    // long (16/03 − 15/03). Used by the interpreter test that asserts the
+    // expansion produces exactly N atomic reservations with the right dates.
+    public const string RecurringWeeklyForThreeWeeksProgram =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation res = reserve myRoom from 15/03-2026 to 16/03-2026 " +
+        "recurring strict every 1 week for 3 weeks;";
+
     // Type error: "every 5" — 5 has type Number, recurrence requires Duration.
     public const string InvalidRecurringNumberInterval =
         "category Room;\nRoom myRoom {}\n" +
@@ -384,4 +393,102 @@ static class TestPrograms
     // "to DateTime" or "for Duration" after the start; neither is present.
     public const string InvalidSyntaxCheckMissingToOrFor =
         "category Room;\nRoom myRoom {}\ncheck myRoom from 15/03-2026;";
+
+    // ── Runtime-focused programs used only by InterpreterTests ───────────────
+    //
+    // These programs are crafted so that the post-execution state is
+    // deterministic and observable (resource count, atom count, selected
+    // resource identity, conflict outcome). They typecheck successfully and
+    // are designed to drive the full Parse → TypeCheck → Interpret pipeline.
+
+    // Two non-overlapping reserves of the same resource combined with "seq".
+    // After execution res must be a composite ReservationVal containing
+    // exactly two atoms: 15/03 → 16/03 and 17/03 → 18/03.
+    public const string CompositeSeqReservationProgram =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation res = reserve myRoom from 15/03-2026 to 16/03-2026 " +
+        "seq reserve myRoom from 17/03-2026 to 18/03-2026;";
+
+    // Two rooms with distinct beds counts; reserve "1 Room r where (r.beds == 2)".
+    // Only roomTwoBeds satisfies the predicate, so the resulting ReservationVal
+    // must contain a single atom whose Resources is exactly [roomTwoBeds].
+    public const string WhereClauseFilteringProgram =
+        "category Room;\n" +
+        "Room roomTwoBeds { Number beds = 2; }\n" +
+        "Room roomFourBeds { Number beds = 4; }\n" +
+        "Reservation res = reserve 1 Room r from 15/03-2026 to 16/03-2026 where (r.beds == 2);";
+
+    // Two reserves of the same resource in the SAME interval.
+    // The first must succeed (Failed() == false) and the second must fail
+    // (Failed() == true) because IsAvailable rejects the overlap.
+    public const string ConflictingReservationProgram =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation first = reserve myRoom from 15/03-2026 to 16/03-2026;\n" +
+        "Reservation second = reserve myRoom from 15/03-2026 to 16/03-2026;";
+
+    // Move a resource from Room into the Suite subcategory, then reserve
+    // "1 Suite" for the same interval. After execution res must be a single
+    // atom whose Resources contains exactly myRoom — proving the moved
+    // resource is reachable through the new category's subtree.
+    public const string MoveThenReserveInNewCategoryProgram =
+        "category Room;\ncategory Suite is a Room;\n" +
+        "Room myRoom {}\n" +
+        "move myRoom to Suite;\n" +
+        "Reservation res = reserve 1 Suite from 15/03-2026 to 16/03-2026;";
+
+    // A template that mutates an outer-scope variable via its parameter.
+    // After "use recordCount(42);" the outer "total" must equal NumberVal(42).
+    // Proves that ExecTemplateCall actually binds parameters at runtime and
+    // that the template body's Set walks up to the enclosing scope.
+    public const string TemplateRuntimeBindingProgram =
+        "Number total = 0;\n" +
+        "template recordCount(Number n) { total = n; }\n" +
+        "use recordCount(42);";
+
+    // A then-branch declares a local Number x. After execution the outer
+    // scope must NOT see x — Interpreter.HandleIf opens envV.NewScope() for
+    // the branch body, so the binding lives only in that child scope and
+    // Lookup("x") on the outer envV must throw.
+    public const string IfScopeIsolationProgram =
+        "if (true) then { Number x = 5; }";
+
+    // A reservation for 15/03 → 17/03 followed by an overlapping availability
+    // check for 16/03 → 18/03. The interval 16/03 → 17/03 is already held,
+    // so ReservationRegistry.IsAvailable must return false and the
+    // Availability statement must print "Availability check failed: ...".
+    public const string AvailabilityWithConflictProgram =
+        "category Room;\nRoom myRoom {}\n" +
+        "Reservation booking = reserve myRoom from 15/03-2026 to 17/03-2026;\n" +
+        "check myRoom from 16/03-2026 to 18/03-2026;";
+
+    // ── End-to-end acceptance scenario ───────────────────────────────────────
+    //
+    // A single program that exercises every front-end module cooperatively:
+    //   category + subcategory declarations
+    //   two ResourceDecls with property bodies
+    //   move (relocates roomB into the subcategory)
+    //   named-resource reserve (binds r1 to a live reservation on roomA)
+    //   category + alias + where reserve over the parent category — this is
+    //     the load-bearing part: GetSubCategories("Room") must include Suite,
+    //     so the moved roomB is reachable through the parent's subtree, and
+    //     the where predicate must filter the Cartesian product down to
+    //     exactly the resource whose beds property equals 4.
+    //   cancel of r1
+    //
+    // The post-execution state pins all of those behaviours simultaneously:
+    //   r1.Failed() == true                      (cancel cleared its atoms)
+    //   r2.Failed() == false                     (filter found a match)
+    //   r2 has exactly one atom on 17/03 → 18/03
+    //   r2's atom reserves exactly roomB         (filter picked beds == 4)
+    //   roomA.CategoryId remains "Room"          (move only touched roomB)
+    //   roomB.CategoryId is now "Suite"          (move propagated)
+    public const string EndToEndScenarioProgram =
+        "category Room;\n" +
+        "category Suite is a Room;\n" +
+        "Room roomA { Number beds = 2; }\n" +
+        "Room roomB { Number beds = 4; }\n" +
+        "move roomB to Suite;\n" +
+        "Reservation r1 = reserve roomA from 15/03-2026 to 16/03-2026;\n" +
+        "Reservation r2 = reserve 1 Room r from 17/03-2026 to 18/03-2026 where (r.beds == 4);\n" +
+        "cancel r1;";
 }
