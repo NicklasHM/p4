@@ -37,3 +37,7 @@ desktop.ini
 *.temp
 src/RAL/testing.ral
 src/RAL/test.ral
+
+# ── Test output and coverage reports ──────────────────────────────────────
+tests/**/TestResults/
+tests/**/CoverageReport/
